@@ -6,4 +6,4 @@ If you can read this file, you succesfully pulled the repo!
 
 /Fredrik
 /Bruce
-/Fredrik
+/Eva
