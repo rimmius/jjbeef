@@ -1,21 +1,22 @@
 %%%Created by: Fredrik Gustafsson.
 %%%Creation date: 111005.
-%%%Info: Reads in and parses the bencoded torrent.
+%%%Info: Reads in and parses the bencoded torrent and gets the information from the tracker.
 -module(read_torrent).
--export([file/2, init/2, get_trackers/1, get_info/1, get_tracker_info/1]).
+-export([file/2, init/1, get_trackers/1, get_info/1, get_tracker_info/1]).
+
 %%This function takes two arguments, Name and File, where Name is the name of the torrent and File is the path to it
 file(Name, File) ->
     case  file:read_file(File) of
 	{ok, Text} ->
 	    {{dict, Dec}, _Remainder} = bencode:decode(Text),
-	    register(Name, spawn(read_torrent, init, [Name, {dict, Dec}]));
+	    register(Name, spawn_link(read_torrent, init, [{dict, Dec}]));
 	_  ->
 	    {error, no_file}
     end.
-init(Name, {dict,Dec}) ->
+init({dict,Dec}) ->
     process_flag(trap_exit, true),
-    link(whereis(Name)),
     loop({dict,Dec}).
+
 %%This function is the loop which returns the information requested, it holds the information about the torrentfile.
 loop({dict, Dec}) ->
     receive
@@ -28,8 +29,9 @@ loop({dict, Dec}) ->
 	    From ! {data, List},
 	    loop({dict, Dec});
 	{'EXIT', _Pid, _Reason} ->
-	    loop(Dec)
+	    {error, bad_torrent}
     end.
+
 %%This function takes one argument which is the name of the torrent file, and returns the List of the trackers given in the torrent file
 get_trackers(Name) ->
     Name ! {self(), request, trackers},
@@ -37,10 +39,14 @@ get_trackers(Name) ->
 	{data, List} ->
 	    make_list(List, [])
     end.
+
+%%These functions make_list returns a proper list with the trackers defined in the torrent file
 make_list([], New_list) ->
     New_list;
 make_list([{_, H}|T], New_list) ->
     make_list(T, [binary_to_list(list_to_binary(H))|New_list]).
+
+%%This function returns the info from the torrent file as a proper string/list
 get_info(Name) ->
     Name ! {self(), request, info_hash},
     receive
@@ -48,7 +54,8 @@ get_info(Name) ->
 	  binary_to_list(iolist_to_binary(bencode:encode(List)))
     end.
 
+%%This function returns the trackers information about the torrent requested.
 get_tracker_info(Name) ->
     [H|T] = get_trackers(Name),
     Info = get_info(Name),
-    connect_to_tracker:get_info(H ++ "?"  ++ Info).
+    connect_to_tracker:get_info(H ++ "?info_hash="  ++ Info).
