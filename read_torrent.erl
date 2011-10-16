@@ -2,14 +2,14 @@
 %%%Creation date: 111005.
 %%%Info: Reads in and parses the bencoded torrent and gets the information from the tracker.
 -module(read_torrent).
--export([file/2, init/1, get_trackers/1, get_info/1, get_tracker_info/1]).
+-export([file/2, init/1, get_trackers/1, get_info/1, get_tracker_info/1, get_length/1]).
 
 %%This function takes two arguments, Name and File, where Name is the name of the torrent and File is the path to it
 file(Name, File) ->
     case  file:read_file(File) of
 	{ok, Text} ->
 	    {{dict, Dec}, _Remainder} = bencode:decode(Text),
-	    register(Name, spawn_link(read_torrent, init, [{dict, Dec}]));
+	    register(Name, spawn(read_torrent, init, [{dict, Dec}]));
 	_  ->
 	    {error, no_file}
     end.
@@ -27,6 +27,14 @@ loop({dict, Dec}) ->
 	{From, request, info_hash} ->
 	    List = dict:fetch(<<"info">>, Dec),
 	    From ! {data, List},
+	    loop({dict, Dec});
+	{From, request, length} ->
+	    %% Info = dict:fetch(<<"info">>, Dec),
+	    %% io:format("~w~n", [Info]),
+	    %% Length = dict:fetch(<<"length">>, Info),
+	    %%-----------------------------------------------------START HERE FREDDYBOY-----------------------------------------------------------------------
+	    Keys = dict:fetch_keys(Dec),
+	    From ! {data, Keys},
 	    loop({dict, Dec});
 	{'EXIT', _Pid, _Reason} ->
 	    {error, bad_torrent}
@@ -51,11 +59,20 @@ get_info(Name) ->
     Name ! {self(), request, info_hash},
     receive
 	{data, List} ->
-	  binary_to_list(iolist_to_binary(bencode:encode(List)))
+	  edoc_lib:escape_uri(binary_to_list(crypto:sha(bencode:encode(List))))
     end.
-
+get_length(Name) ->
+    Name ! {self(), request, length},
+    receive
+	{data, Length} ->
+	    Length
+    end.
 %%This function returns the trackers information about the torrent requested.
 get_tracker_info(Name) ->
     [H|T] = get_trackers(Name),
     Info = get_info(Name),
-    connect_to_tracker:get_info(H ++ "?info_hash="  ++ Info).
+    loop ! {peer_id, self()},
+    receive
+	{peer_id, Peer_id} ->
+	    connect_to_tracker:get_info(H ++ "?info_hash="  ++ Info ++ "&peer_id=" ++ Peer_id ++ "&port=" ++ "5678" ++ "&uploaded=0&downloaded=0")
+    end.
