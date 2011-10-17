@@ -27,7 +27,7 @@ recv(Socket) ->
 		{5,      4, Piece_index} ->
 		    %% have: <len=0005><id=4><piece index>
 		    io:format("len=~w id=~w piece index=~w~nhave~n", [Len, Id, Piece_index]);
-		{X,      5, <<Bitfield/binary>>} ->
+		{X,      5, <<Bitfield:(X-1)*8>>} ->
 		    %% bitfield: <len=0001+X><id=5><bitfield>
 		    io:format("len=1+~w id=~w bitfield=~w~nbitfield~n", [X-1, Id, Bitfield]);
 		{13,     6, <<Index:32, Begin:32, Length:32>>} ->
