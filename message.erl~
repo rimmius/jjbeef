@@ -1,0 +1,9 @@
+-module(message).
+-export([recv/1]).
+
+recv(Socket) ->
+    case gen_tcp:recv(Socket, 0) of
+	{ok, <<Len:32>>
+	{ok, <<Len:32/big, Id:8, Payload/binary>>} ->
+	    ok.
+	    
