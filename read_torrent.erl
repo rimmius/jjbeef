@@ -9,7 +9,7 @@ file(Name, File) ->
     case  file:read_file(File) of
 	{ok, Text} ->
 	    {{dict, Dec}, _Remainder} = bencode:decode(Text),
-	    register(Name, spawn(read_torrent, init, [{dict, Dec}]));
+	    register(Name, spawn_link(read_torrent, init, [{dict, Dec}]));
 	_  ->
 	    {error, no_file}
     end.
@@ -29,12 +29,9 @@ loop({dict, Dec}) ->
 	    From ! {data, List},
 	    loop({dict, Dec});
 	{From, request, length} ->
-	    %% Info = dict:fetch(<<"info">>, Dec),
-	    %% io:format("~w~n", [Info]),
-	    %% Length = dict:fetch(<<"length">>, Info),
-	    %%-----------------------------------------------------START HERE FREDDYBOY-----------------------------------------------------------------------
-	    Keys = dict:fetch_keys(Dec),
-	    From ! {data, Keys},
+	    {_, Info_dict} = dict:fetch(<<"info">>, Dec),
+	    Length = dict:fetch(<<"length">>, Info_dict),
+	    From ! {data, Length},
 	    loop({dict, Dec});
 	{'EXIT', _Pid, _Reason} ->
 	    {error, bad_torrent}
@@ -52,14 +49,19 @@ get_trackers(Name) ->
 make_list([], New_list) ->
     New_list;
 make_list([{_, H}|T], New_list) ->
-    make_list(T, [binary_to_list(list_to_binary(H))|New_list]).
+    case string:substr(binary_to_list(list_to_binary(H)), 1, 1) of
+	"u" ->
+	    make_list(T, New_list);
+	_ ->
+	    make_list(T, [binary_to_list(list_to_binary(H))|New_list])
+    end.
 
 %%This function returns the info from the torrent file as a proper string/list
 get_info(Name) ->
     Name ! {self(), request, info_hash},
     receive
 	{data, List} ->
-	  edoc_lib:escape_uri(binary_to_list(crypto:sha(bencode:encode(List))))
+	    bencode:encode(List)
     end.
 get_length(Name) ->
     Name ! {self(), request, length},
@@ -69,10 +71,24 @@ get_length(Name) ->
     end.
 %%This function returns the trackers information about the torrent requested.
 get_tracker_info(Name) ->
-    [H|T] = get_trackers(Name),
-    Info = get_info(Name),
+    List = get_trackers(Name),
     loop ! {peer_id, self()},
     receive
 	{peer_id, Peer_id} ->
-	    connect_to_tracker:get_info(H ++ "?info_hash="  ++ Info ++ "&peer_id=" ++ Peer_id ++ "&port=" ++ "5678" ++ "&uploaded=0&downloaded=0")
+	    get_tracker_info2(Peer_id, Name, List)
+    end.
+
+get_tracker_info2(_Peer_id, _Name, []) ->
+    {error, not_connected_to_any_tracker};
+get_tracker_info2(Peer_id, Name, [H|T]) ->
+    Info = edoc_lib:escape_uri(binary_to_list(crypto:sha(get_info(Name)))),
+    Length = get_length(Name),
+    Pid = spawn(connect_to_tracker,start,[]),
+    Pid ! {self(), H ++ "?info_hash="  ++ "12345678912345678911"}, % ++ "&peer_id=" ++ edoc_lib:escape_uri(Peer_id) ++ "&port=" ++ "6881" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&event=started
+    receive
+	{ok,Result} ->
+	    ok
+    after 5000 ->
+	    io:format("Timeout ~n"),
+	    get_tracker_info2(Peer_id, Name, T)
     end.
