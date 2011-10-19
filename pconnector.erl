@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author  <Bruce@THINKPAD>
+%%% @author  Bruce Yinhe, Fredrik Gustafsson
 %%% @copyright (C) 2011, 
 %%% @doc
 %%%
