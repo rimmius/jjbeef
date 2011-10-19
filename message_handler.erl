@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
--module(msghandler).
+-module(message_handler).
 -export([start/0, recv/0]).
 
 start() ->

@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
--module(plistener).
+-module(port_listener).
 -export([listen/1, start/1]).
 
 -define(TCP_OPTIONS, [binary, {packet, 0}, {active, false}, {reuseaddr, true}]).

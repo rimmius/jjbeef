@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
--module(pconnector).
+-module(peer_connector).
 -export([start/0, send_mess/1, send_mess/2]).
 -export([loop/1]).
 

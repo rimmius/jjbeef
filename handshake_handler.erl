@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
--module(hshandler).
+-module(handshake_handler).
 -export([start/0, loop/0]).
 
 start() ->
