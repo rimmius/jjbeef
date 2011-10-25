@@ -15,12 +15,13 @@ loop() ->
 	    end,
 	    loop();
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case gen_tcp:connect(Host, Port, [binary, {packet, 0}], 5000) of
+	    case gen_tcp:connect(Host, Port, [binary, {packet, 0}], 1000) of
 		{ok, Sock} ->
-		    io:format(list_to_binary(Peer_id)),
-		    %Msg = list_to_binary([<<19>>,<<"BitTorrent Protocol">>, <<32132123:64>>, <<Info:160>>,binary_to_list(list_to_binary(Peer_id))]),
-		    %ok = gen_tcp:send(Sock, Msg),
-		    From ! {reply, ok},
+		    Info_hashed = list_to_binary(sha:sha1hash(Info)),
+		    Msg = list_to_binary([<<19>>,<<"BitTorrent Protocol">>, <<32132123>>, Info_hashed,<<"12345678912345678911">>]),
+		    io:format("bababa~n"),
+		    ok = gen_tcp:send(Sock, Msg),
+		    From ! {reply, ok, Sock},
 		    loop();
 		{error, Reason} ->
 		    io:format(Reason),
@@ -36,8 +37,8 @@ is_valid_peer_id(Peer_id) ->
 send_handshake(Host, Port, Info, Peer_id, Pid) ->
     Pid ! {send_handshake, self(), {Host, Port, Info, Peer_id}},
     receive
-	{reply, ok} ->
-	    ok;
+	{reply, ok, Sock} ->
+	    Sock;
 	{error, _} ->
 	    error
     end.

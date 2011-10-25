@@ -10,15 +10,24 @@ init() ->
 loop({Peers_nu, Peers_u}) ->
     receive
 	{req_peer, From} ->
-	    {Peers_new, Peers_unew} = fetch_a_peer({Peers_nu, Peers_u}),
-	    From ! {reply, hd(Peers_unew)},
-	    loop({Peers_new, Peers_unew});
+	    case fetch_a_peer({Peers_nu, Peers_u}) of
+		 {{Ip, Port, Sock}, Peers_new, Peers_unew} ->
+		    From ! {reply, {Ip, Port, Sock}},
+		    loop({Peers_new, Peers_unew});
+		{{Ip, Port, Sock}, [], Peers_unew} ->
+		    From ! {reply, {Ip, Port, Sock}},
+		    loop({[], Peers_unew})
+	    end;
 	{insert_peers, From, List_of_peers} ->
 	    From ! {reply, ok},
-	    loop({[List_of_peers|Peers_nu], Peers_u})
+	    loop({List_of_peers, Peers_u})
     end.
-fetch_a_peer({[H|T], Peers_u}) ->
-    {T, [H|Peers_u]}.
+fetch_a_peer({[], [H|T]}) ->
+    Rand = random:uniform(length([H|T])),
+    {Ip, Port, Sock} = lists:nth(Rand, [H|T]),
+    {{Ip, Port, Sock}, [], [H|T]};
+fetch_a_peer({[{Ip, Port, Sock}|T], Peers_u}) ->
+    {{Ip, Port, Sock}, T, [{Ip, Port}|Peers_u]}.
 get_a_peer(Pid) ->
     Pid ! {req_peer, self()},
     receive
@@ -29,21 +38,21 @@ get_a_peer(Pid) ->
 insert_new_peers(List_raw, Pid, Info) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     Hs_pid = handshake:start(),
-    List_handshaken = handshake_all_peers(List_of_peers, Info, "12345678912345678912345678911", [], Hs_pid).
-%Pid ! {insert_peers, self(), List_handshaken},
-  %  receive
-%	{reply, Reply} ->
-%	    Reply
-  %  end.
+    List_handshaken = handshake_all_peers(List_of_peers, Info, "12345678912345678912345678911", [], Hs_pid),
+    Pid ! {insert_peers, self(), List_handshaken},
+    receive
+	{reply, Reply} ->
+	    Reply
+    end.
 handshake_all_peers([], _Info, _Peer_id, New_list, _Hs_pid) ->
     New_list;
 handshake_all_peers([{H, Port}|T], Info, Peer_id, New_list, Hs_pid) ->
     io:format(H),
     case handshake:send_handshake(H, Port, Info, Peer_id, Hs_pid) of
-	ok ->
-	    handshake_all_peers(T,Info, Peer_id, [H|New_list], Hs_pid);
 	error ->
-	    handshake_all_peers(T, Info, Peer_id, New_list, Hs_pid)
+	    handshake_all_peers(T, Info, Peer_id, New_list, Hs_pid);
+	Sock ->
+	    handshake_all_peers(T,Info, Peer_id, [{H, Port, Sock}|New_list], Hs_pid)
     end.
 make_peer_list([], _Ip, _Byte, New_list) ->
     New_list;
