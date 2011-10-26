@@ -3,14 +3,13 @@
 %%%This module supervises the torrent parser module
 
 -module(download_manager).
--export([start/2, init/2]).
+-export([start/2, init/2, is_valid_info_hash/2]).
 
 start(Filepath, GUIPid) ->
     register(?MODULE, spawn(?MODULE, init, [Filepath, GUIPid])).
 
 init(Filepath, GUIPid) ->
     process_flag(trap_exit, true),
-    server:start(12345),
     %%ets:new(torrent_info, [bag, named_table]),
     TPid = spawn_link(read_torrent, start, []),
     TPid ! {read, self(), Filepath},
@@ -20,7 +19,7 @@ init(Filepath, GUIPid) ->
 	    %%loop(GUIPid, {dict, Dict})
     end.
 
-loop({Pieces_missing, Pieces_picked}, Peer_pid) ->
+loop(Info_hash) ->
     receive
 	%% {'EXIT', _Pid, Reason} ->
 	%%     case Reason of
@@ -28,16 +27,11 @@ loop({Pieces_missing, Pieces_picked}, Peer_pid) ->
 	%% 	killed -> GUIPid ! {error, Reason};
 	%% 	_Other -> GUIPid ! {error, _Other}
 	%%     end
-	{dl_piece, From} ->
-	    case Pieces_missing of
-		[] ->
-		    From ! {error, no_pieces_left},
-		    loop({Pieces_missing, Pieces_picked}, Peer_pid);
-		_ ->
-		    {Nr, Piece, New_missing, New_pieces_picked} = get_random_piece(Pieces_missing, Pieces_picked),
-		    From ! {reply,Piece, Peer_pid, Nr-1},
-		    loop({New_missing, New_pieces_picked}, Peer_pid)
-	    end
+	{valid_info, From, Info_from_peer} ->
+	    io:format(is_list(Info_hash)),
+	    io:format(is_list(Info_from_peer)),
+	    From ! binary_to_list(Info_hash) =:= Info_from_peer,
+	    loop(Info_hash)
     end.
 get_random_piece(Pieces_missing, Pieces_done) ->
     Rand = random:uniform(length(Pieces_missing)),
@@ -75,29 +69,37 @@ set_up_tracker(Info, List, Length, {dict, Dict}, List_of_pieces) ->
     send_to_tracker(TrackerPid, Info, New_tracker_list, Length, List_of_pieces).
 send_to_tracker(_Pid, _Info, [], _Length, _List_of_pieces) ->
     exit(self(), kill);
-send_to_tracker(Pid, Info, [H|T], Length, List_of_pieces) ->
-    Pid ! {connect, self(), {Info, H, Length}},
+send_to_tracker(Tracker_pid, Info, [H|T], Length, List_of_pieces) ->
+    Tracker_pid ! {connect, self(), {Info, H, Length}},
     receive
 	{ok, {_,_,Result}} ->
-	    {{dict, Response_from_tracker}, _Remainder} = bencode:decode(list_to_binary(Result)),
-	    handle_tracker_response(Response_from_tracker, Info, List_of_pieces)
+	    case hd(Result) of
+		60  ->
+		    send_to_tracker(Tracker_pid, Info, T, Length, List_of_pieces);
+		_ ->
+		    {{dict, Response_from_tracker}, _Remainder} = bencode:decode(list_to_binary(Result)),
+		    handle_tracker_response(Response_from_tracker, Info, List_of_pieces)
+	    end
     after 2000 ->
 	    io:format("connecting to next tracker in list ~n"),
-	    send_to_tracker(Pid, Info, T, Length, List_of_pieces)
+	    send_to_tracker(Tracker_pid, Info, T, Length, List_of_pieces)
     end.
 handle_pieces([], Piece_list, _Byte, New_list) ->
     lists:reverse([lists:reverse(Piece_list)|New_list]);
 handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
     handle_pieces(T,[H|Piece_list], Byte+1, New_list);
-handle_pieces([H|T], Piece_list, Byte, New_list)  ->
+handle_pieces([_H|T], Piece_list, _Byte, New_list)  ->
     handle_pieces(T,[], 1, [lists:reverse(Piece_list)|New_list]).
 
 handle_tracker_response(Response, Info, List_of_pieces) ->
     List_peers = binary_to_list(dict:fetch(<<"peers">>, Response)),
     Peer_pid = peers:start(),
-    peers:insert_new_peers(List_peers, Peer_pid, Info),
-    Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
-    get_pieces(Piece_pid).
+    Info2 = list_to_binary(sha:sha1raw(Info)),
+    io:format(Info2),
+    Dl_pid = spawn(fun() -> loop(Info2) end),
+    peers:insert_new_peers(List_peers, Peer_pid, Info, Dl_pid).
+    %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
+    %get_pieces(Piece_pid).
 
 get_pieces(Piece_pid) ->
     Piece_pid ! {dl_piece, self()},
@@ -109,3 +111,8 @@ get_pieces(Piece_pid) ->
 	    {start_building_file}
     end.
     
+is_valid_info_hash(Info_from_peer, Pid) ->
+    Pid ! {valid_info, self(), Info_from_peer},
+    receive 
+	Any -> Any end.
+	    

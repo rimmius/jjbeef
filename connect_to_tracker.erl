@@ -38,4 +38,4 @@ get_tracker_info(Tracker, Info, Length) ->
 %%(size)of the file.
 get_tracker_info2(Tracker, Info, Length) ->
     io:format(Tracker  ++  "?info_hash=" ++  Info ++ "~n"),
-    get_info(Tracker ++ "?info_hash=" ++ Info  ++  "&peer_id=" ++ "12345678912345678911" ++ "&port=" ++ "6881" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1"). % 
+    get_info(Tracker ++ "?info_hash=" ++ Info  ++  "&peer_id=" ++ "12345678912345678911" ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "event=started"). % 

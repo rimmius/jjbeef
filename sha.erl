@@ -7,14 +7,16 @@
 
 
 -module sha.
--export([sha1hash/1,urlencode/1,shaurl/1, chunk_it_up/1]).
+-export([sha1hash/1,urlencode/1,shaurl/1, chunk_it_up/1, sha1raw/1]).
 
 %%only sha1 hash
 sha1hash(Data)->
     crypto:start(),
     L = [ hd(integer_to_list(N, 16)) || << N:4 >> <= crypto:sha(Data) ],
     L.
-
+sha1raw(Data) ->
+    crypto:start(),
+    binary_to_list(crypto:sha(Data)).
 %%only urlencoding
 urlencode(Sha)->
     edoc_lib:escape_uri(Sha).
