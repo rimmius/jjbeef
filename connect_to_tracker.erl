@@ -3,18 +3,35 @@
 %%%Info: Connects to specified tracker and retrieves info about the torrent specified.
 -module(connect_to_tracker).
 -export([start/0, make_list/2]).
-%%This function takes one argument, the url to the tracker.
-
+%%Start function: spawn_links a new process to init function
 start() ->
+    spawn_link(fun() -> init() end).
+%%Init function waits for the first connect message and then
+init() ->
     receive
 	{connect,From, {Info, Tracker, Length}} ->
-	    Info2 = sha:shaurl(Info),
-	    From ! get_tracker_info(Tracker, Info2, Length)
+	    Info_sha = sha:shaurl(Info),
+	    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info_sha  ++  "&peer_id=" ++ "12345678912345678911" ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
+	    From ! {ok, Peers},
+	    loop(Info_sha, Min_time)
     end.
+loop(Info, Time) ->
+    receive
+    after Time ->
+	    io:format("connect to tracker~n"),
+	    loop(Info, Time)
+    end.	
+
 get_info(Url) ->
     inets:start(),
-    Result = httpc:request(Url),
-    Result.
+    {ok, {_,_,Result}} = httpc:request(Url),
+    {{dict, Response_from_tracker}, _Remainder} = bencode:decode(list_to_binary(Result)),
+    {get_peers(Response_from_tracker), get_time(Response_from_tracker)}.
+
+get_peers(Response_from_tracker) ->
+    binary_to_list(dict:fetch(<<"peers">>, Response_from_tracker)).
+get_time(Response_from_tracker) ->
+    dict:fetch(<<"interval">>, Response_from_tracker).
 
 make_list([], New_list) ->
     New_list;
@@ -25,17 +42,3 @@ make_list([{_, H}|T], New_list) ->
 	_ ->
 	    make_list(T, [binary_to_list(list_to_binary(H))|New_list])
     end.
-
-get_tracker_info(Tracker, Info, Length) ->
-    %loop ! {peer_id, self()},
-    %receive
-	%{peer_id, Peer_id} ->
-	    get_tracker_info2(Tracker, Info, Length).
-    %end.
-
-%%Recursively tries to connect to all the trackers given in the torrent file, basecase with not connected to any tracker.
-%%It takes 5 arguments: the Peer_id which is the id of the client, the Name of the torrent file as process, the list of trackers, the info-hash and the length
-%%(size)of the file.
-get_tracker_info2(Tracker, Info, Length) ->
-    io:format(Tracker  ++  "?info_hash=" ++  Info ++ "~n"),
-    get_info(Tracker ++ "?info_hash=" ++ Info  ++  "&peer_id=" ++ "12345678912345678911" ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "event=started"). % 

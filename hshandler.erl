@@ -18,7 +18,6 @@ loop(Dl_pid) ->
 	{handshake, From, Pstrlen, Pstr, Reserved, Info_hash, Peer_id} ->
 	    case download_manager:is_valid_info_hash(binary_to_list(Info_hash), Dl_pid) of
 		true ->
-		    io:format("mama ~n"),
 		    From ! {reply, self(), ok}
 	    end
     end.

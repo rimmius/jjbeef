@@ -28,8 +28,6 @@ loop(Info_hash) ->
 	%% 	_Other -> GUIPid ! {error, _Other}
 	%%     end
 	{valid_info, From, Info_from_peer} ->
-	    io:format(is_list(Info_hash)),
-	    io:format(is_list(Info_from_peer)),
 	    From ! binary_to_list(Info_hash) =:= Info_from_peer,
 	    loop(Info_hash)
     end.
@@ -64,7 +62,7 @@ get_length([{_,H}|T], Total) ->
     {ok, Value} = dict:find(<<"length">>,H),
     get_length(T, Total+Value).
 set_up_tracker(Info, List, Length, {dict, Dict}, List_of_pieces) ->
-    TrackerPid = spawn_link(connect_to_tracker, start, []),
+    TrackerPid = connect_to_tracker:start(),
     New_tracker_list = connect_to_tracker:make_list(List, []) ++ binary_to_list(dict:fetch(<<"announce">>, Dict)),
     send_to_tracker(TrackerPid, Info, New_tracker_list, Length, List_of_pieces).
 send_to_tracker(_Pid, _Info, [], _Length, _List_of_pieces) ->
@@ -72,14 +70,8 @@ send_to_tracker(_Pid, _Info, [], _Length, _List_of_pieces) ->
 send_to_tracker(Tracker_pid, Info, [H|T], Length, List_of_pieces) ->
     Tracker_pid ! {connect, self(), {Info, H, Length}},
     receive
-	{ok, {_,_,Result}} ->
-	    case hd(Result) of
-		60  ->
-		    send_to_tracker(Tracker_pid, Info, T, Length, List_of_pieces);
-		_ ->
-		    {{dict, Response_from_tracker}, _Remainder} = bencode:decode(list_to_binary(Result)),
-		    handle_tracker_response(Response_from_tracker, Info, List_of_pieces)
-	    end
+	{ok, Peers} ->
+	    connect_to_peers(Info, List_of_pieces, Peers)
     after 2000 ->
 	    io:format("connecting to next tracker in list ~n"),
 	    send_to_tracker(Tracker_pid, Info, T, Length, List_of_pieces)
@@ -91,13 +83,11 @@ handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
 handle_pieces([_H|T], Piece_list, _Byte, New_list)  ->
     handle_pieces(T,[], 1, [lists:reverse(Piece_list)|New_list]).
 
-handle_tracker_response(Response, Info, List_of_pieces) ->
-    List_peers = binary_to_list(dict:fetch(<<"peers">>, Response)),
+connect_to_peers(Info, List_of_pieces, List_of_peers) ->
     Peer_pid = peers:start(),
     Info2 = list_to_binary(sha:sha1raw(Info)),
-    io:format(Info2),
     Dl_pid = spawn(fun() -> loop(Info2) end),
-    peers:insert_new_peers(List_peers, Peer_pid, Info, Dl_pid).
+    peers:insert_new_peers(List_of_peers, Peer_pid, Info, Dl_pid).
     %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
     %get_pieces(Piece_pid).
 
