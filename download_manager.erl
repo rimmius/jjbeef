@@ -6,27 +6,19 @@
 -export([start/2, init/2, is_valid_info_hash/2]).
 
 start(Filepath, GUIPid) ->
-    register(?MODULE, spawn(?MODULE, init, [Filepath, GUIPid])).
+    spawn_link(?MODULE, init, [Filepath, GUIPid]).
 
 init(Filepath, GUIPid) ->
     process_flag(trap_exit, true),
-    %%ets:new(torrent_info, [bag, named_table]),
     TPid = spawn_link(read_torrent, start, []),
     TPid ! {read, self(), Filepath},
     receive
 	{reply, {dict, Dict}} ->
 	    store_info({dict,Dict})
-	    %%loop(GUIPid, {dict, Dict})
     end.
 
 loop(Info_hash) ->
     receive
-	%% {'EXIT', _Pid, Reason} ->
-	%%     case Reason of
-	%% 	normal -> ok;
-	%% 	killed -> GUIPid ! {error, Reason};
-	%% 	_Other -> GUIPid ! {error, _Other}
-	%%     end
 	{valid_info, From, Info_from_peer} ->
 	    From ! binary_to_list(Info_hash) =:= Info_from_peer,
 	    loop(Info_hash)
