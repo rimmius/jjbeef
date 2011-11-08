@@ -33,8 +33,8 @@ recv_loop(Socket, Dl_pid) ->
 	    %% Handshake reader
 	    %% --------------------------	
 	    
-	    Pid_h = hshandler:start(Dl_pid),
-	    Pid_m = msghandler:start(),
+	    Pid_h = handshake_handler:start(Dl_pid),
+	    Pid_m = message_handler:start(),
 	    Pid_h ! {handshake, self(), Pstrlen, Pstr, Reserved, <<Info_hash:160>>, Peer_id},
 	    receive 
 		{reply, Pid_h, ok} ->
