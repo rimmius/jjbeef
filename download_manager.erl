@@ -3,7 +3,7 @@
 %%%This module supervises the torrent parser module
 
 -module(download_manager).
--export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1]).
+-export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1, get_my_info_hash/1]).
 
 start(Filepath, GUIPid, My_id) ->
     spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
@@ -33,6 +33,9 @@ loop(Info_hash, My_id) ->
 	    loop(Info_hash, My_id);
 	{get_id, From} ->
 	    From ! {reply, My_id},
+	    loop(Info_hash, My_id);
+	{get_my_info_hash, From} ->
+	    From ! {reply, Info_hash},
 	    loop(Info_hash, My_id)
     end.
 get_random_piece(Pieces_missing, Pieces_done) ->
@@ -98,7 +101,7 @@ connect_to_peers(Info, List_of_pieces, List_of_peers, My_id) ->
     Peer_pid = peers:start(),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),
-    peers:insert_new_peers(List_of_peers, Peer_pid, Info, Dl_pid).
+    peers:insert_new_peers(List_of_peers, Peer_pid, Dl_pid).
     %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
     %get_pieces(Piece_pid).
 
@@ -116,9 +119,16 @@ is_valid_info_hash(Info_from_peer, Pid) ->
     Pid ! {valid_info, self(), Info_from_peer},
     receive 
 	Any -> Any end.
-	    
+
 get_my_id(Dl_pid) ->
     Dl_pid ! {get_id, self()},
+    receive
+	{reply, Reply} ->
+	    Reply
+    end.
+
+get_my_info_hash(Dl_pid) ->
+    Dl_pid ! {get_my_info_hash, self()},
     receive
 	{reply, Reply} ->
 	    Reply
