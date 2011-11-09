@@ -9,17 +9,18 @@ start() ->
 %%Init function waits for the first connect message and then
 init() ->
     receive
-	{connect,From, {Info, Tracker, Length}} ->
+	{connect,From, {Info, Tracker, Length}, My_id} ->
 	    Info_sha = sha:shaurl(Info),
-	    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info_sha  ++  "&peer_id=" ++ "12345678912345678911" ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
+	    io:format(My_id),
+	    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info_sha  ++  "&peer_id=" ++ My_id ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
 	    From ! {ok, Peers},
-	    loop(Info_sha, Min_time)
+	    loop(Info_sha, Min_time, My_id)
     end.
-loop(Info, Time) ->
+loop(Info, Time, My_id) ->
     receive
     after Time ->
 	    io:format("connect to tracker~n"),
-	    loop(Info, Time)
+	    loop(Info, Time, My_id)
     end.	
 
 get_info(Url) ->

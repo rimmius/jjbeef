@@ -22,7 +22,7 @@ loop({Peers_nu, Peers_u}) ->
 	    case gen_tcp:connect(Host, Port, [binary, {packet, 0}], 1000) of
 		{ok, Sock} ->
 		    Info_hashed = list_to_binary(sha:sha1hash(Info)),
-		    Msg = list_to_binary([<<19>>,<<"BitTorrent Protocol">>, <<32132123>>, Info_hashed,<<"12345678912345678911">>]),
+		    Msg = list_to_binary([<<19>>,<<"BitTorrent Protocol">>, <<3,2,1,3,2,1,2,3>>, Info_hashed,list_to_binary(Peer_id)]),
 		    io:format("baba~n"),
 		    ok = gen_tcp:send(Sock, Msg),
 		    From ! {reply, ok, Sock},
@@ -48,12 +48,13 @@ get_a_peer(Pid) ->
 insert_new_peers(List_raw, Peers_pid, Info, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     port_listener:start(12345, Dl_pid),
-    List_handshaken = handshake_all_peers(List_of_peers, Info, "12345678912345678912345678911", [], Peers_pid),
+    List_handshaken = handshake_all_peers(List_of_peers, Info, download_manager:get_my_id(Dl_pid), [], Peers_pid),
     Peers_pid ! {insert_peers, self(), List_handshaken},
     receive
 	{reply, Reply} ->
 	    Reply
     end.
+
 handshake_all_peers([], _Info, _Peer_id, New_list, _Peers_pid) ->
     New_list;
 handshake_all_peers([{H, Port}|T], Info, Peer_id, New_list, Peers_pid) ->
@@ -85,7 +86,17 @@ send_handshake(Host, Port, Info, Peer_id, Pid) ->
     Pid ! {send_handshake, self(), {Host, Port, Info, Peer_id}},
     receive
 	{reply, ok, Sock} ->
+	    spawn(fun() -> recv_loop(Sock) end),
 	    Sock;
 	{error, _} ->
 	    error
+    end.
+
+recv_loop(Socket) ->
+    case gen_tcp:recv(Socket, 0) of
+	{ok, Msg} ->
+	    io:format("~w~w~n", ["From handshaken", Msg]),
+	    recv_loop(Socket);
+	{error, Reason} ->
+	    io:format("~w~n", [Reason])
     end.
