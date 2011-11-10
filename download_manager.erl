@@ -10,12 +10,20 @@ start(Filepath, GUIPid, My_id) ->
 
 init(Filepath, GUIPid, My_id) ->
     process_flag(trap_exit, true),
-    TPid = spawn_link(read_torrent, start, []),
-    TPid ! {read, self(), Filepath},
-    receive
-	{reply, {dict, Dict}} ->
-	    store_info({dict,Dict}, My_id)
-    end.
+    %% Read torrent file
+    case file:read_file(FileName) of
+	{ok, Text} -> case bencode:decode(Text) of
+			  {{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
+		      end;
+	_Error  -> GUIPid ! {error, no_file}
+    end,
+
+    %% create table for storing data for downloaded pieces
+    temp_storage:create_ets('FileName'),
+    
+    %%create mutex for exclusive access to ets table
+    MutexPid = mutex:start(),
+    link(MutexPid).
 
 init(Filepath, GUIPid) ->
     process_flag(trap_exit, true),
