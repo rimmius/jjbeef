@@ -83,26 +83,32 @@ send_handshake(Host, Port, Info, Peer_id, Peers_pid, Dl_pid) ->
     end.
 
 recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
-    case gen_tcp:recv(Socket, 0) of
-	{ok, <<Pstrlen:8/integer, 
-	       Pstr:(19*8), 
-	       Reserved:64, 
-	       Info_hash:160,
-	       Peer_id:160>>} ->
-	    io:format("GOT HANDSHAKE BACK~n~n~n"),
-	    Pid_h = handshake_handler:start(Dl_pid),
-	    Pid_h ! {handshake, self(), Pstrlen, Pstr, Reserved, <<Info_hash:160>>, Peer_id},
-	    receive
-		{reply, Pid_h, ok} ->
-		    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
-		    insert_valid_peer(Peers_pid, Peer_id, Socket, Host),
-		    message_handler:start(Dl_pid, Socket),
-		    io:format("WAITING FOR MESSAGE FROM TRACKERPEER~n~n~n");
-		{reply, Pid_h, drop_connection} ->
-		    gen_tcp:close(Socket)
+    case gen_tcp:recv(Socket, 20) of
+	{ok, <<19, "BitTorrent protocol">>} ->
+	%%{ok, <<Pstrlen:8/integer, 
+	%%     Pstr:(19*8), 
+	%%   Reserved:64, 
+	%% Info_hash:160,
+	%%Peer_id:160>>} ->
+	    case gen_tcp:recv(Socket, 48) of
+		{ok, <<Reserved:64,
+		       Info_hash:160,
+		       Peer_id:160>>} ->
+		    io:format("GOT HANDSHAKE BACK~n~n~n"),
+		    Pid_h = handshake_handler:start(Dl_pid),
+		    Pid_h ! {handshake, self(), 19, "BitTorrent protocol", Reserved, <<Info_hash:160>>, Peer_id},
+		    receive
+			{reply, Pid_h, ok} ->
+			    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
+			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host),
+			    message_handler:start(Dl_pid, Socket),
+			    io:format("WAITING FOR MESSAGE FROM TRACKERPEER~n~n~n");
+			{reply, Pid_h, drop_connection} ->
+			    gen_tcp:close(Socket)
+		    end
 	    end;
 	{ok, Data} ->	
-	    io:format(binary_to_list(Data) ++ "~n");
+	    io:format("FYFAN DATA: " ++binary_to_list(Data) ++ "~n");
 	{error, Reason} ->
 	    io:format("FYFAN REASON: ~w~n", [Reason])
     end.
