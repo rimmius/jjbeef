@@ -5,10 +5,10 @@
 -module(download_manager).
 -export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1, get_my_info_hash/1]).
 
-start(Filepath, GUIPid, My_id) ->
-    spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
+start(FileName, GUIPid, My_id) ->
+    spawn_link(?MODULE, init, [FileName, GUIPid, My_id]).
 
-init(Filepath, GUIPid, My_id) ->
+init(FileName, GUIPid, My_id) ->
     process_flag(trap_exit, true),
     %% Read torrent file
     case file:read_file(FileName) of
@@ -25,10 +25,10 @@ init(Filepath, GUIPid, My_id) ->
     MutexPid = mutex:start(),
     link(MutexPid).
 
-init(Filepath, GUIPid) ->
+init(FileName, GUIPid) ->
     process_flag(trap_exit, true),
     TPid = spawn_link(read_torrent, start, []),
-    TPid ! {read, self(), Filepath},
+    TPid ! {read, self(), FileName},
     receive
 	{reply, {dict, Dict}} ->
 	    store_info({dict,Dict}, guimain:createUniqueId())
