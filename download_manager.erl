@@ -5,22 +5,30 @@
 -module(download_manager).
 -export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1, get_my_info_hash/1]).
 
-start(Filepath, GUIPid, My_id) ->
-    spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
+start(FileName, GUIPid, My_id) ->
+    spawn_link(?MODULE, init, [FileName, GUIPid, My_id]).
 
-init(Filepath, GUIPid, My_id) ->
+init(FileName, GUIPid, My_id) ->
+    process_flag(trap_exit, true),
+    %% Read torrent file
+    case file:read_file(FileName) of
+	{ok, Text} -> case bencode:decode(Text) of
+			  {{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
+		      end;
+	_Error  -> GUIPid ! {error, no_file}
+    end,
+
+    %% create table for storing data for downloaded pieces
+    temp_storage:create_ets('FileName'),
+    
+    %%create mutex for exclusive access to ets table
+    MutexPid = mutex:start(),
+    link(MutexPid).
+
+init(FileName, GUIPid) ->
     process_flag(trap_exit, true),
     TPid = spawn_link(read_torrent, start, []),
-    TPid ! {read, self(), Filepath},
-    receive
-	{reply, {dict, Dict}} ->
-	    store_info({dict,Dict}, My_id)
-    end.
-
-init(Filepath, GUIPid) ->
-    process_flag(trap_exit, true),
-    TPid = spawn_link(read_torrent, start, []),
-    TPid ! {read, self(), Filepath},
+    TPid ! {read, self(), FileName},
     receive
 	{reply, {dict, Dict}} ->
 	    store_info({dict,Dict}, guimain:createUniqueId())
