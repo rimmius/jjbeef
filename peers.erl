@@ -1,5 +1,5 @@
 -module(peers).
--export([start/0, get_a_peer/1, insert_new_peers/3, insert_valid_peer/3]).
+-export([start/0, get_a_peer/1, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
 -export([init/0]).
 
 start() ->
@@ -38,13 +38,19 @@ get_a_peer(Pid) ->
 	{reply, Peer} ->
 	    Peer
     end.
-insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
+insert_new_peers(List_raw, Peers_pid, Dl_pid, Tracker_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     port_listener:start(12345, Dl_pid, Peers_pid),
     Info_hash = download_manager:get_my_info_hash(Dl_pid),
     My_id = download_manager:get_my_id(Dl_pid),
-    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], Peers_pid, Dl_pid).
-
+    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], Peers_pid, Dl_pid),
+    connect_to_tracker:give_more(Peers_pid, Tracker_pid, Dl_pid).
+insert_peers_later(List_raw, Peers_pid, Dl_pid) ->
+    List_of_peers = make_peer_list(List_raw, "", 1, []),
+    Info_hash = download_manager:get_my_info_hash(Dl_pid),
+    My_id = download_manager:get_my_id(Dl_pid),    
+    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], Peers_pid, Dl_pid),
+    io:format("~n~nHANDSHAKED~n~n").
 handshake_all_peers([], _Info, _Peer_id, New_list, _Peers_pid, _Dl_pid) ->
     ok;
 handshake_all_peers([{H, Port}|T], Info, Peer_id, New_list, Peers_pid, Dl_pid) ->
@@ -96,7 +102,7 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
 		       Peer_id:160>>} ->
 		    io:format("GOT HANDSHAKE BACK~n~n~n"),
 		    Pid_h = handshake_handler:start(Dl_pid),
-		    Pid_h ! {handshake, self(), 19, "BitTorrent protocol", Reserved, <<Info_hash:160>>, Peer_id},
+		    Pid_h ! {handshake, self(), Reserved, <<Info_hash:160>>, Peer_id},
 		    receive
 			{reply, Pid_h, ok} ->
 			    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
@@ -112,6 +118,7 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
 	{error, Reason} ->
 	    io:format("FYFAN REASON: ~w~n", [Reason])
     end.
+
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host) ->    
     Peers_pid ! {insert_peer, self(), Sock, Peer_id, Host},
     receive

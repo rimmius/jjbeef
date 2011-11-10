@@ -85,7 +85,7 @@ send_to_tracker(Info, [H|T], Length, List_of_pieces, My_id) ->
     Tracker_pid ! {connect, self(), {Info, H, Length}, My_id},
     receive
 	{ok, Peers} ->
-	    connect_to_peers(Info, List_of_pieces, Peers, My_id)
+	    connect_to_peers(Info, List_of_pieces, Peers, My_id, Tracker_pid)
     after 2000 ->
 	    io:format("connecting to next tracker in list ~n"),
 	    send_to_tracker(Info, T, Length, List_of_pieces, My_id)
@@ -97,11 +97,11 @@ handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
 handle_pieces([_H|T], Piece_list, _Byte, New_list)  ->
     handle_pieces(T,[], 1, [lists:reverse(Piece_list)|New_list]).
 
-connect_to_peers(Info, List_of_pieces, List_of_peers, My_id) ->
+connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
     Peer_pid = peers:start(),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),
-    peers:insert_new_peers(List_of_peers, Peer_pid, Dl_pid).
+    peers:insert_new_peers(List_of_peers, Peer_pid, Dl_pid, Tracker_pid).
     %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
     %get_pieces(Piece_pid).
 
