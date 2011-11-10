@@ -1,3 +1,6 @@
+%%%Created by: Fredrik Gustafsson
+%%%Date: 2011-10-25
+%%%
 -module(peers).
 -export([start/0, get_a_peer/1, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
 -export([init/0]).

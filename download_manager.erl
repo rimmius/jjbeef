@@ -5,19 +5,27 @@
 -module(download_manager).
 -export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1, get_my_info_hash/1]).
 
-start(FileName, GUIPid, My_id) ->
-    spawn_link(?MODULE, init, [FileName, GUIPid, My_id]).
+start(Filepath, GUIPid, My_id) ->
+    spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
 
-init(FileName, GUIPid, My_id) ->
+init(Filepath, GUIPid, My_id) ->
+%%     process_flag(trap_exit, true),
+%%     TPid = spawn_link(read_torrent, start, []),
+%%     TPid ! {read, self(), Filepath},
+%%     receive
+%% 	{reply, {dict, Dict}} ->
+%% 	    store_info({dict,Dict}, My_id)
+%%     end.
     process_flag(trap_exit, true),
     %% Read torrent file
     case file:read_file(FileName) of
-	{ok, Text} -> case bencode:decode(Text) of
-			  {{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
-		      end;
+	{ok, Text} -> 
+	    case bencode:decode(Text) of
+		{{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
+	    end;
 	_Error  -> GUIPid ! {error, no_file}
     end,
-
+    
     %% create table for storing data for downloaded pieces
     temp_storage:create_ets('FileName'),
     
@@ -25,10 +33,10 @@ init(FileName, GUIPid, My_id) ->
     MutexPid = mutex:start(),
     link(MutexPid).
 
-init(FileName, GUIPid) ->
+init(Filepath, GUIPid) ->
     process_flag(trap_exit, true),
     TPid = spawn_link(read_torrent, start, []),
-    TPid ! {read, self(), FileName},
+    TPid ! {read, self(), Filepath},
     receive
 	{reply, {dict, Dict}} ->
 	    store_info({dict,Dict}, guimain:createUniqueId())
@@ -106,10 +114,10 @@ handle_pieces([_H|T], Piece_list, _Byte, New_list)  ->
     handle_pieces(T,[], 1, [lists:reverse(Piece_list)|New_list]).
 
 connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
-    Peer_pid = peers:start(),
+    Peers_pid = peers:start(),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),
-    peers:insert_new_peers(List_of_peers, Peer_pid, Dl_pid, Tracker_pid).
+    peers:insert_new_peers(List_of_peers, Peers_pid, Dl_pid, Tracker_pid).
     %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
     %get_pieces(Piece_pid).
 

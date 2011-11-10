@@ -16,20 +16,20 @@ init() ->
 	    From ! {ok, Peers},
 	    loop(Info_sha, Min_time,My_id, Tracker, "12345",Length, false, false)
     end.
-loop(Info, Time, My_id, Tracker, Port,Length, Peer_pid, Dl_pid) -> %%Change to get length from jing and eva later ::):):)
+loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid) -> %%Change to get length from jing and eva later ::):):)
     receive
-	{more_info, New_peer_pid, New_dl_pid} ->
-	    loop(Info, Time, My_id, Tracker, Port, Length, New_peer_pid, New_dl_pid) %%SAME SAME
+	{more_info, New_peers_pid, New_dl_pid} ->
+	    loop(Info, Time, My_id, Tracker, Port, Length, New_peers_pid, New_dl_pid) %%SAME SAME
     after Time ->
-	    case {Peer_pid, Dl_pid} of
+	    case {Peers_pid, Dl_pid} of
 		{false, false} ->
 		    io:format("Cant connect to tracker yet~n~n"),
 		    loop(Info, Time, My_id, Tracker, Port,Length, false, false);
 		{_, _} ->
 		    io:format("connect to tracker~n"),
 		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
-		    spawn(peers, insert_peers_later, [Peers, Peer_pid, Dl_pid]),
-		    loop(Info, Min_time, My_id, Tracker, Port, Length, Peer_pid, Dl_pid)
+		    spawn(peers, insert_peers_later, [Peers, Peers_pid, Dl_pid]),
+		    loop(Info, Min_time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid)
 	    end
     end.	
 
