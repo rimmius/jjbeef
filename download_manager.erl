@@ -18,7 +18,7 @@ init(Filepath, GUIPid, My_id) ->
 %%     end.
     process_flag(trap_exit, true),
     %% Read torrent file
-    case file:read_file(FileName) of
+    case file:read_file(Filepath) of
 	{ok, Text} -> 
 	    case bencode:decode(Text) of
 		{{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
@@ -106,12 +106,12 @@ send_to_tracker(Info, [H|T], Length, List_of_pieces, My_id) ->
 	    io:format("connecting to next tracker in list ~n"),
 	    send_to_tracker(Info, T, Length, List_of_pieces, My_id)
     end.
-handle_pieces([], Piece_list, _Byte, New_list) ->
+handle_pieces([], Piece_list, Byte, New_list) ->
     lists:reverse([lists:reverse(Piece_list)|New_list]);
 handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
     handle_pieces(T,[H|Piece_list], Byte+1, New_list);
-handle_pieces([_H|T], Piece_list, _Byte, New_list)  ->
-    handle_pieces(T,[], 1, [lists:reverse(Piece_list)|New_list]).
+handle_pieces(List, Piece_list, _Byte, New_list)  ->
+    handle_pieces(List,[], 1, [lists:reverse(Piece_list)|New_list]).
 
 connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
     Peers_pid = peers:start(),
