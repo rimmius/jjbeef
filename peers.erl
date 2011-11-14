@@ -110,7 +110,7 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
 			{reply, Pid_h, ok} ->
 			    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
 			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host),
-			    message_handler:start(Dl_pid, Socket),
+			    
 			    io:format("WAITING FOR MESSAGE FROM TRACKERPEER~n~n~n");
 			{reply, Pid_h, drop_connection} ->
 			    gen_tcp:close(Socket)
@@ -123,6 +123,7 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host) ->    
+    message_handler:start(Dl_pid, Socket, Peer_id),
     Peers_pid ! {insert_peer, self(), Sock, Peer_id, Host},
     receive
 	{reply, Reply} ->
