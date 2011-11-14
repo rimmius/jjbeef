@@ -2,8 +2,8 @@
 %%%Creation date: 2011-11-08
 
 -module(temp_storage).
--export([create_ets/0,insert/4,retrieve_all_data/0, insert_new_peer/5,
-	update_peer/4, read_bitfield/2]).
+-export([create_peer_ets/0,insert/4,retrieve_all_data/0, insert_new_peer/5,
+	update_peer/4, read_field/3]).
 
 -record(peer, {peerid = undefined, interested = 0, choke = 1, 
 	       bitfield = undefined, ip = undefined, socket = undefined,
@@ -36,9 +36,14 @@ update_peer(PeerId, Db, Field, Value) ->
 
 %% read certain peer fields and return their value
 read_field(Db, PeerId, Field) ->
-    [Peer] = ets:lookup(Db, PeerId),    
-    FieldValue = Peer#peer.Field,
-    FieldValue.
+    [Peer] = ets:lookup(Db, PeerId),
+    case Field of
+	interested -> Peer#peer.interested;
+	choke -> Peer#peer.choke;
+	bitfield -> Peer#peer.bitfield;
+	socket -> Peer#peer.socket;
+	port -> Peer#peer.port
+    end.	    
 
 %% this will be used later for file storage
 retrieve_all_data() ->
