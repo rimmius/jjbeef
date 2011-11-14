@@ -60,8 +60,8 @@ free() ->
 	    Has_inserted = temp_storage:insert(Index, Hash, Data),
 	    ClientPid ! {reply, Has_inserted},	    
 	    busy(ClientPid);
-	stop ->
-	    terminate()
+	stop -> ok
+%	    terminate()
     end.
 
 busy(ClientPid) ->
@@ -70,12 +70,12 @@ busy(ClientPid) ->
 	    free()
     end.
 
-terminate() ->
-    receive
-	{_} ->
-	    exit(ClientPid, kill),
-	    terminate()
-    after
-	0 -> ok
-    end.
+%terminate() ->
+%    receive
+%	{_} ->
+%	    exit(ClientPid, kill),
+%	    terminate()
+%    after
+%	0 -> ok
+%    end.
 
