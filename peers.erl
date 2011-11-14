@@ -8,7 +8,7 @@
 start() ->
     spawn(peers, init, []).
 init() ->
-    T_id = ets:new(torrent, []),
+    T_id = temp_storage:create_ets(),
     Mutex_pid = mutex:start(),
     loop(T_id, Mutex_pid).
 
