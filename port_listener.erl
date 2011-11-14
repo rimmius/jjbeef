@@ -48,9 +48,6 @@ recv(Socket, Dl_pid, Parent) ->
 			    %% ----------------------
 			    
 			    ok = peers:insert_valid_peer(Parent, Peer_id, Socket),
-			    
-			    message_handler:start(Dl_pid, Socket),
-			    
 			    io:format("Handshaken, I'm waiting for message~n");
 			%%  receive
 			%%{reply, Pid_m, Reply} ->
