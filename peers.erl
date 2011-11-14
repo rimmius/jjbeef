@@ -100,12 +100,7 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 		    receive
 			{reply, Pid_h, ok} ->
 			    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
-<<<<<<< HEAD
 			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host, Port),
-=======
-			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host),
-			    
->>>>>>> f44d51e974189caec52fe4e08d46ee406c497b96
 			    io:format("WAITING FOR MESSAGE FROM TRACKERPEER~n~n~n");
 			{reply, Pid_h, drop_connection} ->
 			    gen_tcp:close(Socket)
@@ -117,14 +112,8 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 	    io:format("FYFAN REASON: ~w~n", [Reason])
     end.
 
-<<<<<<< HEAD
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
-=======
-insert_valid_peer(Peers_pid, Peer_id, Sock, Host) ->    
-    message_handler:start(Dl_pid, Socket, Peer_id),
-    Peers_pid ! {insert_peer, self(), Sock, Peer_id, Host},
->>>>>>> f44d51e974189caec52fe4e08d46ee406c497b96
     receive
 	{reply, {T_id, Mutex_pid}} ->
 	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
