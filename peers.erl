@@ -2,19 +2,21 @@
 %%%Date: 2011-10-25
 %%%
 -module(peers).
--export([start/0, get_a_peer/1, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
+-export([start/0, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
 -export([init/0]).
 
 start() ->
     spawn(peers, init, []).
 init() ->
-    loop([]).
+    T_id = ets:new(torrent, []),
+    Mutex_pid = mutex:start(),
+    loop(T_id, Mutex_pid).
 
-loop(Peers_valid) ->
+loop(T_id, Mutex_pid) ->
     receive
-	{insert_peer, From, Sock, Peer_id, Ip} ->
-	    From ! {reply, ok},
-	    loop([{Peer_id, Ip, Sock, handshaken}|Peers_valid]);
+	{get_storage, From} ->
+	    From ! {reply, {T_id, Mutex_pid}},
+	    loop(T_id, Mutex_pid);
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case gen_tcp:connect(Host, Port, [binary, {active, false},{packet, 0}], 1000) of
 		{ok, Sock} ->
@@ -22,25 +24,14 @@ loop(Peers_valid) ->
 		    ok = gen_tcp:send(Sock, Msg),
 		    io:format("Sent handshake to peer from tracker~n"),
 		    From ! {reply, ok, Sock},
-		    loop(Peers_valid);
+		    loop(T_id, Mutex_pid);
 		{error, Reason} ->
 		    io:format(Reason),
 		    From ! {error, Reason},
-		    loop(Peers_valid)
+		    loop(T_id, Mutex_pid)
 	    end
     end.
-fetch_a_peer({[], [H|T]}) ->
-    Rand = random:uniform(length([H|T])),
-    {Ip, Port, Sock} = lists:nth(Rand, [H|T]),
-    {{Ip, Port, Sock}, [], [H|T]};
-fetch_a_peer({[{Ip, Port, Sock}|T], Peers_u}) ->
-    {{Ip, Port, Sock}, T, [{Ip, Port}|Peers_u]}.
-get_a_peer(Pid) ->
-    Pid ! {req_peer, self()},
-    receive
-	{reply, Peer} ->
-	    Peer
-    end.
+
 insert_new_peers(List_raw, Peers_pid, Dl_pid, Tracker_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     port_listener:start(12345, Dl_pid, Peers_pid),
@@ -85,13 +76,13 @@ send_handshake(Host, Port, Info, Peer_id, Peers_pid, Dl_pid) ->
     Peers_pid ! {send_handshake, self(), {Host, Port, Info, Peer_id}},
     receive
 	{reply, ok, Sock} ->
-	    spawn(fun() -> recv_loop(Sock, Dl_pid, Host, Peers_pid) end),
+	    spawn(fun() -> recv_loop(Sock, Dl_pid, Host, Port, Peers_pid) end),
 	    Sock;
 	{error, _} ->
 	    error
     end.
 
-recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
+recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
     case gen_tcp:recv(Socket, 20) of
 	{ok, <<19, "BitTorrent protocol">>} ->
 	%%{ok, <<Pstrlen:8/integer, 
@@ -109,8 +100,7 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
 		    receive
 			{reply, Pid_h, ok} ->
 			    io:format("HANDSHAKE BACK FROM TRACKERPEER PROVED~n~n~n"),
-			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host),
-			    
+			    insert_valid_peer(Peers_pid, Peer_id, Socket, Host, Port),
 			    io:format("WAITING FOR MESSAGE FROM TRACKERPEER~n~n~n");
 			{reply, Pid_h, drop_connection} ->
 			    gen_tcp:close(Socket)
@@ -122,16 +112,17 @@ recv_loop(Socket, Dl_pid, Host, Peers_pid) ->
 	    io:format("FYFAN REASON: ~w~n", [Reason])
     end.
 
-insert_valid_peer(Peers_pid, Peer_id, Sock, Host) ->    
-    message_handler:start(Dl_pid, Socket, Peer_id),
-    Peers_pid ! {insert_peer, self(), Sock, Peer_id, Host},
+insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
+    Peers_pid ! {get_storage, self()},
     receive
-	{reply, Reply} ->
-	    Reply
+	{reply, {T_id, Mutex_pid}} ->
+	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
+	    mutex:write_new_peer(Mutex_pid, T_id, Host,Peer_id, Sock, Port),
+	    message_handler:start(Mutex_pid, T_id, Sock, Peer_id)
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
-    insert_valid_peer(Peers_pid, Peer_id, Sock, unknown).
+    insert_valid_peer(Peers_pid, Peer_id, Sock, unknown, unknown).
     %% A = gen_tcp:recv(Socket, 0),
     %% io:format("Received handshake back~n"),
     %% message_handler:start(Dl_pid, Socket),
