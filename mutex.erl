@@ -5,7 +5,7 @@
 
 -module(mutex).
 -export([start/0, stop/1]).
--export([write_file/4, write_new_peer/5, update_peer/4, received/1]).
+-export([write_file/4, write_new_peer/5, update_peer/4, received/1,get_field/3]).
 -export([init/0]).
 
 start() ->
@@ -44,6 +44,13 @@ update_peer(MutexPid, PeerId, Field, Value) ->
 received(MutexPid) ->
     MutexPid ! {received, self()}, ok.
 
+get_field(MutexPid,PeerId,Field)->
+    MutexPid ! {read_field,PeerId,Field,self()},
+    receive
+	{reply,Value} ->
+	    Value
+    end.
+
 
 free(TempPid) ->
     receive
@@ -68,6 +75,12 @@ free(TempPid) ->
 	    Has_inserted = temp_storage:insert(Index, Hash, Data),
 	    ClientPid ! {reply, Has_inserted},	    
 	    busy(ClientPid,TempPid);
+	{read_field,PeerId,Field,ClientPid}->
+	    TempPid!{read_field,PeerId,Field,ClientPid},
+	    receive
+		{reply,Value}->
+		    ClientPid!{reply,Value}
+	    end;	    
 	stop -> ok
 %	    terminate()
     end.
