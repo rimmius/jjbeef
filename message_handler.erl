@@ -7,14 +7,15 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/4, init/4, lol/2]).
+-export([start/4, init/4]).
+-export([send_bitfield/2, make_bitfield/2]).
 
 start(Parent, Fs_pid, Socket, Peer_id) ->
     spawn(?MODULE, init, [Parent, Fs_pid, Socket, Peer_id]).
 
 init(Parent, Fs_pid, Socket, Peer_id) ->
     Pid_message_reader = message_reader:start(Parent, Peer_id),
-    %% send_bitfield(Socket, file_storage:get_bitfield(Fs_pid)),
+    send_bitfield(Socket, file_storage:get_bitfield(Fs_pid)),
     recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader).
 
 recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader) ->    
@@ -92,17 +93,18 @@ recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader) ->
 	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n")
     end.
 
-%send_bitfield(Socket, Bitfield_in_list) ->
-%    case lol(Bitfield_in_list) of
-%	<<Any, Rest:1>> ->
-%	    
-%    gen_tcp:send(Socket, lol(Bitfield_in_list, 0)).
+send_bitfield(Socket, Bitfield_in_list) ->
+    {Bitfield_in_bits, Len} = make_bitfield(Bitfield_in_list, 1),
+    Msg = <<(Len+1):32/integer-big, 5, Bitfield_in_bits/bitstring>>,  
+    io:format("~w~n", [Msg]),
+    gen_tcp:send(Socket, Msg).
 
-lol([H], Index) when Index == 8 ->
-    <<H:1>>;
-%lol([H], Index) ->
- %   [<<H:1>>, <<Index;
-lol([H|T], Index) ->
-    Rest = lol(T, Index+1),
-    list_to_bitstring([<<H:1>>, <<Rest/bits>>]).
+make_bitfield([H], Index) when Index rem 8 == 0 ->
+    {<<H:1>>, Index div 8};
+make_bitfield([H], Index) ->
+    {Rest, X} = make_bitfield([0], Index+1),
+    {list_to_bitstring([<<H:1>>, <<Rest/bits>>]), X};
+make_bitfield([H|T], Index) ->
+    {Rest, X} = make_bitfield(T, Index+1),
+    {list_to_bitstring([<<H:1>>, <<Rest/bits>>]), X}.
 
