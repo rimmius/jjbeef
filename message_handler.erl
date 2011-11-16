@@ -7,7 +7,7 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/4, init/4, lol/1]).
+-export([start/4, init/4, lol/2]).
 
 start(Parent, Fs_pid, Socket, Peer_id) ->
     spawn(?MODULE, init, [Parent, Fs_pid, Socket, Peer_id]).
@@ -98,10 +98,10 @@ recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader) ->
 %	    
 %    gen_tcp:send(Socket, lol(Bitfield_in_list, 0)).
 
-lol([H], Index) when Index = 8 ->
+lol([H], Index) when Index == 8 ->
     <<H:1>>;
-lol([H], Index) ->
-    <<H:1>>;
+%lol([H], Index) ->
+ %   [<<H:1>>, <<Index;
 lol([H|T], Index) ->
     Rest = lol(T, Index+1),
     list_to_bitstring([<<H:1>>, <<Rest/bits>>]).
