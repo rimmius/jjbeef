@@ -10,7 +10,7 @@ start() ->
 %%Starts the Mutex and stores the pid of it in the loop
 init() ->
     Mutex_pid = peer_storage:start(),
-    Fs_pid = file_storage:start(),
+    Fs_pid = file_storage:start(self(), [], 468),
     loop(Mutex_pid, Fs_pid).
 %%
 loop(Mutex_pid, Fs_pid) ->
