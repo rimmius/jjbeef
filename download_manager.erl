@@ -3,19 +3,13 @@
 %%%This module supervises the torrent parser module
 
 -module(download_manager).
--export([start/3, init/3, init/2, is_valid_info_hash/2, get_my_id/1, get_my_info_hash/1]).
+-export([start/3, init/3, init/2, is_valid_info_hash/2, 
+	 get_my_id/1, get_my_info_hash/1]).
 
 start(Filepath, GUIPid, My_id) ->
     spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
 
 init(Filepath, GUIPid, My_id) ->
-%%     process_flag(trap_exit, true),
-%%     TPid = spawn_link(read_torrent, start, []),
-%%     TPid ! {read, self(), Filepath},
-%%     receive
-%% 	{reply, {dict, Dict}} ->
-%% 	    store_info({dict,Dict}, My_id)
-%%     end.
     process_flag(trap_exit, true),
     %% Read torrent file
     case file:read_file(Filepath) of
@@ -24,15 +18,8 @@ init(Filepath, GUIPid, My_id) ->
 		{{dict, Dict}, _Remainder} -> store_info(Dict, My_id)
 	    end;
 	_Error  -> GUIPid ! {error, no_file}
-    end,
+    end.
     
-    %% create table for storing data for downloaded pieces
-    temp_storage:create_ets('FileName'),
-    
-    %%create mutex for exclusive access to ets table
-    MutexPid = mutex:start(),
-    link(MutexPid).
-
 init(Filepath, GUIPid) ->
     process_flag(trap_exit, true),
     TPid = spawn_link(read_torrent, start, []),
@@ -73,12 +60,15 @@ store_info({dict,Dict}, My_id) ->
     %List = dict:fetch(<<"announce">>, Dict),
     {_, Info_dict} = dict:fetch(<<"info">>, Dict),
     Pieces = dict:fetch(<<"pieces">>, Info_dict),
-    List_of_pieces = handle_pieces(binary_to_list(Pieces),[], 1, []), %%Send in to eva-lisa and jing later :):)
+    %%Send in to eva-lisa and jing later :):)
+    List_of_pieces = handle_pieces(binary_to_list(Pieces),[], 1, []),
     case dict:find(<<"files">>, Info_dict) of
 	{ok, {_,Files_dict}} ->
-	    set_up_tracker(Info, Tracker_list, get_length(Files_dict, 0), {dict, Dict}, List_of_pieces, My_id);
+	    set_up_tracker(Info, Tracker_list, get_length(Files_dict, 0), 
+			   {dict, Dict}, List_of_pieces, My_id);
 	error ->
-	    set_up_tracker(Info, Tracker_list, dict:fetch(<<"length">>, Info_dict), {dict, Dict}, List_of_pieces, My_id)
+	    set_up_tracker(Info, Tracker_list, dict:fetch(<<"length">>, 
+			      Info_dict), {dict, Dict}, List_of_pieces, My_id)
     end.
 get_length([], Total) ->
     Total;
@@ -98,6 +88,7 @@ send_to_tracker(_Info, [], _Length, _List_of_pieces, _My_id) ->
     exit(self(), kill);
 send_to_tracker(Info, [H|T], Length, List_of_pieces, My_id) ->
     Tracker_pid = connect_to_tracker:start(),
+    link(Tracker_pid),
     Tracker_pid ! {connect, self(), {Info, H, Length}, My_id},
     receive
 	{ok, Peers} ->
@@ -115,6 +106,7 @@ handle_pieces(List, Piece_list, _Byte, New_list)  ->
 
 connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
     Peers_pid = peers:start(),
+    link(Peers_pid),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),
     peers:insert_new_peers(List_of_peers, Peers_pid, Dl_pid, Tracker_pid).
