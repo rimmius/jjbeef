@@ -92,16 +92,16 @@ recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader) ->
 	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n")
     end.
 
-send_bitfield(Socket, Bitfield_in_list) ->
-    case lol(Bitfield_in_list) of
-	<<Any, Rest:1>> ->
-	    
-    gen_tcp:send(Socket, lol(Bitfield_in_list, 0)).
+%send_bitfield(Socket, Bitfield_in_list) ->
+%    case lol(Bitfield_in_list) of
+%	<<Any, Rest:1>> ->
+%	    
+%    gen_tcp:send(Socket, lol(Bitfield_in_list, 0)).
 
 lol([H], Index) when Index = 8 ->
     <<H:1>>;
 lol([H], Index) ->
-    <<H:1>>
+    <<H:1>>;
 lol([H|T], Index) ->
     Rest = lol(T, Index+1),
     list_to_bitstring([<<H:1>>, <<Rest/bits>>]).
