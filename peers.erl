@@ -4,19 +4,19 @@
 -module(peers).
 -export([start/0, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
 -export([init/0]).
-
+%%Starts the peers module and hands back the pid
 start() ->
     spawn(peers, init, []).
+%%Starts the Mutex and stores the pid of it in the loop
 init() ->
-    T_id = temp_storage:create_ets(),
     Mutex_pid = mutex:start(),
-    loop(T_id, Mutex_pid).
-
-loop(T_id, Mutex_pid) ->
+    loop(Mutex_pid).
+%%
+loop(Mutex_pid) ->
     receive
 	{get_storage, From} ->
-	    From ! {reply, {T_id, Mutex_pid}},
-	    loop(T_id, Mutex_pid);
+	    From ! {reply, Mutex_pid},
+	    loop(Mutex_pid);
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case gen_tcp:connect(Host, Port, [binary, {active, false},{packet, 0}], 1000) of
 		{ok, Sock} ->
@@ -24,11 +24,11 @@ loop(T_id, Mutex_pid) ->
 		    ok = gen_tcp:send(Sock, Msg),
 		    io:format("Sent handshake to peer from tracker~n"),
 		    From ! {reply, ok, Sock},
-		    loop(T_id, Mutex_pid);
+		    loop(Mutex_pid);
 		{error, Reason} ->
 		    io:format(Reason),
 		    From ! {error, Reason},
-		    loop(T_id, Mutex_pid)
+		    loop(Mutex_pid)
 	    end
     end.
 
@@ -43,6 +43,7 @@ insert_peers_later(List_raw, Peers_pid, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     Info_hash = download_manager:get_my_info_hash(Dl_pid),
     My_id = download_manager:get_my_id(Dl_pid),    
+    io:format("~w~n", [Dl_pid]),
     ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], Peers_pid, Dl_pid),
     io:format("~n~nHANDSHAKED~n~n").
 handshake_all_peers([], _Info, _Peer_id, New_list, _Peers_pid, _Dl_pid) ->
@@ -115,10 +116,10 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
     receive
-	{reply, {T_id, Mutex_pid}} ->
+	{reply, Mutex_pid} ->
 	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
-	    mutex:write_new_peer(Mutex_pid, T_id, Host,Peer_id, Sock, Port),
-	    message_handler:start(Mutex_pid, T_id, Sock, Peer_id)
+	    mutex:write_new_peer(Mutex_pid, Host,Peer_id, Sock, Port),
+	    message_handler:start(Mutex_pid, Sock, Peer_id)
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
