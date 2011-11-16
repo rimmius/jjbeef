@@ -2,15 +2,15 @@
 %%%Date: 2011-10-25
 %%%
 -module(peers).
--export([start/0, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
--export([init/0]).
+-export([start/1, insert_new_peers/4, insert_valid_peer/3, insert_peers_later/3]).
+-export([init/1]).
 %%Starts the peers module and hands back the pid
-start() ->
-    spawn(peers, init, []).
+start(Nr_of_pieces) ->
+    spawn(peers, init, [Nr_of_pieces]).
 %%Starts the Mutex and stores the pid of it in the loop
-init() ->
+init(Nr_of_pieces) ->
     Mutex_pid = peer_storage:start(),
-    Fs_pid = file_storage:start(self(), [], 468),
+    Fs_pid = file_storage:start(self(), [], Nr_of_pieces),
     loop(Mutex_pid, Fs_pid).
 %%
 loop(Mutex_pid, Fs_pid) ->

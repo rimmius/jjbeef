@@ -105,7 +105,7 @@ handle_pieces(List, Piece_list, _Byte, New_list)  ->
     handle_pieces(List,[], 1, [lists:reverse(Piece_list)|New_list]).
 
 connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
-    Peers_pid = peers:start(),
+    Peers_pid = peers:start(length(List_of_pieces)),
     link(Peers_pid),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),
