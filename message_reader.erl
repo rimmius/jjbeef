@@ -9,15 +9,15 @@ loop(Parent, Peer_id) ->
     receive
 	{bitfield, Bitfield, Bitfield_len} ->
 	    io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
- 	    peer_storage:update_peer(Parent, Peer_id, bitfield, lol(<<Bitfield:Bitfield_len>>, 0)),
- 	    peer_storage:received(Parent),
+ 	    %%peer_storage:update_peer(Parent, Peer_id, bitfield, lol(<<Bitfield:Bitfield_len>>, 0)),
+ 	    %%peer_storage:received(Parent),
 	    loop(Parent, Peer_id);
 	{have, Piece_index} ->
-	    Old_bitfield = peer_storage:read_field(Parent, Peer_id, bitfield),
-	    peer_storage:received(Parent),
-	    New_bitfield = lists:keyreplace(Piece_index, 2, Old_bitfield, {1, Piece_index}),
-	    peer_storage:update_peer(Parent, Peer_id, bitfield, New_bitfield),
-	    peer_storage:received(Parent),
+	    %%Old_bitfield = peer_storage:read_field(Parent, Peer_id, bitfield),
+	    %%peer_storage:received(Parent),
+	    %%New_bitfield = lists:keyreplace(Piece_index, 2, Old_bitfield, {1, Piece_index}),
+	    %%peer_storage:update_peer(Parent, Peer_id, bitfield, New_bitfield),
+	    %%peer_storage:received(Parent),
 	    loop(Parent, Peer_id);
 	{choked, 1} ->
 	    peer_storage:update_peer(Parent, Peer_id, choke, 1),
