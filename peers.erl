@@ -9,14 +9,15 @@ start() ->
     spawn(peers, init, []).
 %%Starts the Mutex and stores the pid of it in the loop
 init() ->
-    Mutex_pid = mutex:start(),
-    loop(Mutex_pid).
+    Mutex_pid = peer_storage:start(),
+    Fs_pid = file_storage:start(),
+    loop(Mutex_pid, Fs_pid).
 %%
-loop(Mutex_pid) ->
+loop(Mutex_pid, Fs_pid) ->
     receive
 	{get_storage, From} ->
-	    From ! {reply, Mutex_pid},
-	    loop(Mutex_pid);
+	    From ! {reply, {Mutex_pid, Fs_pid}},
+	    loop(Mutex_pid, Fs_pid);
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case gen_tcp:connect(Host, Port, [binary, {active, false},{packet, 0}], 1000) of
 		{ok, Sock} ->
@@ -24,11 +25,11 @@ loop(Mutex_pid) ->
 		    ok = gen_tcp:send(Sock, Msg),
 		    io:format("Sent handshake to peer from tracker~n"),
 		    From ! {reply, ok, Sock},
-		    loop(Mutex_pid);
+		    loop(Mutex_pid, Fs_pid);
 		{error, Reason} ->
 		    io:format(Reason),
 		    From ! {error, Reason},
-		    loop(Mutex_pid)
+		    loop(Mutex_pid, Fs_pid)
 	    end
     end.
 
@@ -116,11 +117,11 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
     receive
-	{reply, Mutex_pid} ->
+	{reply, {Mutex_pid, Fs_pid}} ->
 	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
-	    mutex:write_new_peer(Mutex_pid, Host,Peer_id, Sock, Port),
-	    mutex:received(Mutex_pid),
-	    message_handler:start(Mutex_pid, Sock, Peer_id)
+	    peer_storage:insert_new_peer(Mutex_pid, Host,Peer_id, Sock, Port),
+	    peer_storage:received(Mutex_pid),
+	    message_handler:start(Mutex_pid,Fs_pid, Sock, Peer_id)
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
