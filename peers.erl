@@ -119,6 +119,7 @@ insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
 	{reply, Mutex_pid} ->
 	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
 	    mutex:write_new_peer(Mutex_pid, Host,Peer_id, Sock, Port),
+	    mutex:received(Mutex_pid),
 	    message_handler:start(Mutex_pid, Sock, Peer_id)
     end.
 
