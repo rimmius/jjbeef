@@ -5,11 +5,16 @@
 
 -module(mutex).
 -export([start/0, stop/1]).
--export([write_file/4, write_new_peer/6, update_peer/5, received/1]).
+-export([write_file/4, write_new_peer/5, update_peer/4, received/1]).
 -export([init/0]).
 
 start() ->
     spawn(?MODULE, init, []).
+
+
+init() ->
+    TempPid = temp_storage:start_ets(),
+    free(TempPid).
 
 stop(MutexPid) ->
     MutexPid ! stop.
@@ -22,15 +27,15 @@ write_file(MutexPid, Index, Hash, Data)->
     end.
 
 %% send peer info to mutex for storage in db
-write_new_peer(MutexPid, Db, Ip, PeerId, Socket, Port) ->
-    MutexPid ! {write_new_peer, Db, Ip, PeerId, Socket, Port, self()},
+write_new_peer(MutexPid, Ip, PeerId, Socket, Port) ->
+    MutexPid ! {write_new_peer, Ip, PeerId, Socket, Port, self()},
     receive {reply, Reply} -> 
 	    Reply
     end.  
 
 %% send updated peer info to mutex for storage in db
-update_peer(MutexPid, PeerId, Db, Elem, Value) ->  
-    MutexPid ! {update_peer, PeerId, Db, Elem, Value, self()},
+update_peer(MutexPid, PeerId, Field, Value) ->  
+    MutexPid ! {update_peer, PeerId, Field, Value, self()},
     receive {reply, Reply} -> 
 	    Reply
     end.
@@ -39,35 +44,38 @@ update_peer(MutexPid, PeerId, Db, Elem, Value) ->
 received(MutexPid) ->
     MutexPid ! {received, self()}, ok.
 
-init() ->
-    free().
 
-free() ->
+free(TempPid) ->
     receive
-	{update_peer, PeerId, Db, Elem, Value, ClientPid} ->
+	{update_peer, PeerId, Field, Value, ClientPid} ->
 	    %% updated peer info in db. if successful atom true is returned
-	    Has_updated = temp_storage:update_peer(PeerId, Db, Elem, Value),
-	    ClientPid ! {reply, Has_updated},
-	    busy(ClientPid);
-	{write_new_peer, Db, Ip, PeerId, Socket, Port, ClientPid} ->
+	    TempPid!{update_peer,PeerId,Field,Value,self()},
+	    receive
+		{reply,Reply}->
+		    ClientPid ! {reply, Reply}
+	    end,
+	    busy(ClientPid,TempPid);
+	{write_new_peer, Ip, PeerId, Socket, Port, ClientPid} ->
 	    %% store peer info in db. if successful atom true is returned
-	    Has_added = temp_storage:insert_new_peer(Db, Ip, PeerId, Socket, 
-						     Port),
-	    ClientPid ! {reply, Has_added},
-	    busy(ClientPid);
+	     TempPid!{write_new_peer,Ip,PeerId, Socket, Port,self()},
+	    receive
+		{reply,Reply}->
+		    ClientPid ! {reply, Reply}
+	    end,
+	    busy(ClientPid,TempPid);
 	{write, Index, Hash, Data, ClientPid}->
 	    %% this will be used later for file storage
 	    Has_inserted = temp_storage:insert(Index, Hash, Data),
 	    ClientPid ! {reply, Has_inserted},	    
-	    busy(ClientPid);
+	    busy(ClientPid,TempPid);
 	stop -> ok
 %	    terminate()
     end.
 
-busy(ClientPid) ->
+busy(ClientPid,TempPid) ->
     receive
 	{received, ClientPid} ->
-	    free()
+	    free(TempPid)
     end.
 
 %terminate() ->
