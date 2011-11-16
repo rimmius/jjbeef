@@ -1,6 +1,6 @@
 -module(message_reader).
--export([start/3]).
--export([loop/3]).
+-export([start/2]).
+-export([loop/2]).
 
 start(Parent, Peer_id) ->
     spawn(?MODULE, loop, [Parent, Peer_id]).
@@ -15,14 +15,18 @@ loop(Parent, Peer_id) ->
 	    New_bitfield = lists:keyreplace(Piece_index, 2, Old_bitfield, {1, Piece_index}),
 	    mutex:update_peer(Parent, Peer_id, bitfield, New_bitfield),
 	    loop(Parent, Peer_id);
-	{choke} ->
+	{choked, 1} ->
 	    mutex:update_peer(Parent, Peer_id, choke, 1),
 	    loop(Parent, Peer_id);
-	{unchoke} ->
+	{choked, 0} ->
 	    mutex:update_peer(Parent, Peer_id, choke, 0),
+	    loop(Parent, Peer_id);
+	{interested, 1} ->
+	    mutex:update_peer(Parent, Peer_id, interested, 1),
+	    loop(Parent, Peer_id);
+	{interested, 0} ->
+	    mutex:update_peer(Parent, Peer_id, interested, 0),
 	    loop(Parent, Peer_id)
-		
-		
     end.
 
 lol(<<P:1>>, Index) ->
