@@ -72,7 +72,11 @@ loop(Tid)->
 	{write_new_peer, Ip, PeerId, Socket, Port, From}->
 		 Has_inserted = insert_new_peer(Tid,Ip, PeerId, Socket, Port),
 		 From!{reply,Has_inserted},
-		 loop(Tid)
+	    loop(Tid);
+	{read_field,PeerId,Field,From} ->
+	    Value = read_field(Tid, PeerId, Field),
+	    From!{reply,Value}
+	    
     end.
    
     
