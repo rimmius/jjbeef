@@ -45,11 +45,20 @@ received(Pid)->
 free(Tid)->
     receive
 	{insert_bitfield,PeerId,Bitfield,From}->
-	    From!{reply,insert_bitfield_local(Tid,PeerId,Bitfield)},
+	    Reply = insert_bitfield_local(Tid,PeerId,Bitfield),
+	    case Reply of 
+		true->io:format("we have inserted ~w, ~w, ~w~n",
+				[Tid,PeerId,Bitfield])
+	    end,
+	    From!{reply,Reply},
 	    busy(From,Tid);
 	{read_piece,Index,From} ->
-	    From!{reply,read_piece_local(Tid,Index)},
-	    busy(From,Tid)
+	    Reply = read_piece_local(Tid,Index),
+	    io:format("we have read ~w, ~w~n",[Tid,Index]),
+	    From!{reply,Reply},
+	    busy(From,Tid);
+	{putback,Piece} ->
+	    putback(Piece,Tid)
     end.
 
 busy(ClientPid,Tid)->
@@ -63,7 +72,7 @@ insert_bitfield_local(Tid,PeerId,[H|T])->
     insert_to_table(Has,PeerId,Tid).
 
 insert_to_table([Has|T],PeerId,Tid)->
-    [{Index,{Hash,Peers}}]=ets:lookup(Tid,Has),
+    [Index,{Hash,Peers}]=ets:lookup(Tid,Has),
      ets:insert(Tid,{Index,{Hash,[PeerId|Peers]}}),
      insert_to_table(T,PeerId,Tid);
 insert_to_table([],_PeerId,_Tid) ->
@@ -72,3 +81,8 @@ insert_to_table([],_PeerId,_Tid) ->
 read_piece_local(Tid,Index)->
     [Content]= ets:lookup(Tid,Index),
     Content.
+
+%% insert the piece returned from downloading_storage
+putback(Piece,Tid)->
+    {PieceIndex,{Piecehash,AllPeersList}}=Piece,
+    ets:insert(Tid, {PieceIndex,{Piecehash,AllPeersList}}).
