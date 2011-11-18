@@ -24,6 +24,9 @@ loop(Parent, Files, Data, Table_id, Length) ->
 	    loop(Parent, Files, Bitfield, Table_id, Length);
 	{insert, From, {Index, Piece}} ->
 	    ets:insert(Table_id, {Index, Piece}),
+	    {ok , Io} = file:open("baba.txt", [write]),
+	    ok =  write_to_file(Table_id, 1, Length, Io),
+	    ok = file:close(Io),
 	    From ! {reply, ok},
 	    loop(Parent, Files, Data, Table_id, Length)
     end.
@@ -52,3 +55,15 @@ insert_piece(File_storage_pid, Index, Piece) ->
 	{reply, Reply} ->
 	    Reply
     end.
+
+write_to_file(Table_id, Acc, Length, Io) when Acc =< Length ->
+    case ets:lookup(Table_id, Acc) of
+	[] ->
+	    write_to_file(Table_id, Acc+1, Length, Io);
+	[{_, Write}]  ->
+	    io:format("~w~n", [Write]),
+	    file:write(Io, Write),
+	    write_to_file(Table_id, Acc+1, Length, Io)
+    end;
+write_to_file(_Table_id, _Acc, _Length, _Io) ->
+    ok.
