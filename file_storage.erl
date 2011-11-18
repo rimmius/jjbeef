@@ -61,7 +61,6 @@ write_to_file(Table_id, Acc, Length, Io) when Acc =< Length ->
 	[] ->
 	    write_to_file(Table_id, Acc+1, Length, Io);
 	[{_, Write}]  ->
-	    io:format("~w~n", [Write]),
 	    file:write(Io, Write),
 	    write_to_file(Table_id, Acc+1, Length, Io)
     end;
