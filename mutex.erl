@@ -1,102 +1,53 @@
-%%% Created by: Francesco Cesarini,Simon Thompson 
+%%% Created by: Francesco Cesarini, Simon Thompson 
 %%% from the book Erlang Programming page 130 
 %%% Modified by: Eva-Lisa Kedborn, Jing Liu
 %%% Creation date: 2011-11-08
+%%% This module isolates process access to db storage to ensure data safety
 
 -module(mutex).
--export([start/0, stop/1]).
--export([write_file/4, write_new_peer/5, update_peer/4, received/1,get_field/3]).
--export([init/0]).
+-export([start/1, stop/1]).
+-export([init/1, received/1, request/3]).
 
-start() ->
-    spawn(?MODULE, init, []).
+start(Module) ->
+    spawn(?MODULE, init, [Module]).
 
-
-init() ->
-    TempPid = temp_storage:start_ets(),
-    free(TempPid).
+init(Module) ->
+    StoragePid = Module:start(),
+    free(StoragePid).
 
 stop(MutexPid) ->
     MutexPid ! stop.
 
-%% this will be used later for file storage
-write_file(MutexPid, Index, Hash, Data)->
-    MutexPid ! {write_file, Index, Hash, Data, self()},
-    receive {reply, Reply} -> 
-	    Reply
-    end.
+received(MutexPid)->
+    MutexPid ! {received, self()},
+    ok.
 
-%% send peer info to mutex for storage in db
-write_new_peer(MutexPid, Ip, PeerId, Socket, Port, self()) ->
-    MutexPid ! {write_new_peer, Ip, PeerId, Socket, Port, self()},
-    receive {reply, Reply} -> 
-	    Reply
-    end.  
+request(MutexPid, Function, [Args]) ->
+    MutexPid ! {Function, [Args], self()},
+    receive {reply, Reply} -> Reply end.
 
-%% send updated peer info to mutex for storage in db
-update_peer(MutexPid, PeerId, Field, Value) ->  
-    MutexPid ! {update_peer, PeerId, Field, Value, self()},
-    receive {reply, Reply} -> 
-	    Reply
-    end.
-
-%% once client received reply the mutex should be set to free
-received(MutexPid) ->
-    MutexPid ! {received, self()}, ok.
-
-get_field(MutexPid,PeerId,Field)->
-    MutexPid ! {read_field,PeerId,Field,self()},
+free(StoragePid) ->
     receive
-	{reply,Value} ->
-	    Value
+	{Function, [Args], ClientPid} ->
+	    StoragePid ! {request, Function, [Args], self()},
+	    receive {reply, Reply} -> ClientPid ! Reply end,
+	    busy(ClientPid, StoragePid);
+	stop -> terminate(StoragePid)
     end.
 
-
-free(TempPid) ->
-    receive
-	{update_peer, PeerId, Field, Value, ClientPid} ->
-	    %% updated peer info in db. if successful atom true is returned
-	    TempPid!{update_peer,PeerId,Field,Value,self()},
-	    receive
-		{reply,Reply}->
-		    ClientPid ! {reply, Reply}
-	    end,
-	    busy(ClientPid,TempPid);
-	{write_new_peer, Ip, PeerId, Socket, Port, ClientPid} ->
-	    %% store peer info in db. if successful atom true is returned
-	     TempPid!{write_new_peer,Ip,PeerId, Socket, Port,self()},
-	    receive
-		{reply,Reply}->
-		    ClientPid ! {reply, Reply}
-	    end,
-	    busy(ClientPid,TempPid);
-	{write, Index, Hash, Data, ClientPid}->
-	    %% this will be used later for file storage
-	    Has_inserted = temp_storage:insert(Index, Hash, Data),
-	    ClientPid ! {reply, Has_inserted},	    
-	    busy(ClientPid,TempPid);
-	{read_field,PeerId,Field,ClientPid}->
-	    TempPid!{read_field,PeerId,Field,ClientPid},
-	    receive
-		{reply,Value}->
-		    ClientPid!{reply,Value}
-	    end;	    
-	stop -> ok
-%	    terminate()
-    end.
-
-busy(ClientPid,TempPid) ->
+busy(ClientPid, StoragePid) ->
     receive
 	{received, ClientPid} ->
-	    free(TempPid)
+	    free(StoragePid)
     end.
 
-%terminate() ->
-%    receive
-%	{_} ->
-%	    exit(ClientPid, kill),
-%	    terminate()
-%    after
-%	0 -> ok
-%    end.
+terminate(StoragePid) ->
+    receive
+	{_Function, [_Args], ClientPid } ->
+	    exit(ClientPid, kill),
+	    terminate(StoragePid)
+    after
+	0 -> StoragePid ! stop,
+	     ok
+    end.
 
