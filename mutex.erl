@@ -22,14 +22,14 @@ received(MutexPid)->
     MutexPid ! {received, self()},
     ok.
 
-request(MutexPid, Function, [Args]) ->
-    MutexPid ! {Function, [Args], self()},
+request(MutexPid, Function, Args) ->
+    MutexPid ! {Function, Args, self()},
     receive {reply, Reply} -> Reply end.
 
 free(StoragePid) ->
     receive
-	{Function, [Args], ClientPid} ->
-	    StoragePid ! {request, Function, [Args], self()},
+	{Function, Args, ClientPid} ->
+	    StoragePid ! {request, Function, Args, self()},
 	    receive {reply, Reply} -> ClientPid ! Reply end,
 	    busy(ClientPid, StoragePid);
 	stop -> terminate(StoragePid)
