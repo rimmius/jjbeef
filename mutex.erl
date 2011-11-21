@@ -5,14 +5,14 @@
 %%% This module isolates process access to db storage to ensure data safety
 
 -module(mutex).
--export([start/1, stop/1]).
--export([init/1, received/1, request/3]).
+-export([start/2, stop/1]).
+-export([init/2, received/1, request/3]).
+%%changed this to two-arguments, if the start function takes arguments
+start(Module, Args) ->
+    spawn(?MODULE, init, [Module, Args]).
 
-start(Module) ->
-    spawn(?MODULE, init, [Module]).
-
-init(Module) ->
-    StoragePid = Module:start(),
+init(Module, Args) ->
+    StoragePid = apply(Module, start, Args), %%changed this to apply to make it easier to apply the arguments of the start function.
     free(StoragePid).
 
 stop(MutexPid) ->
