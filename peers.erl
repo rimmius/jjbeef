@@ -159,10 +159,16 @@ insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
     receive
 	{reply, {Peer_storage_pid, _File_storage_pid, Piece_storage_pid, _Dl_storage_pid}} ->
+	    io:format("~n ready to request to mutex~n"),
 	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 					 Sock, Port, undefined]),
+	    io:format("~n mutex request done~n"),
+
 	    mutex:received(Peer_storage_pid),
+
+	    io:format("~n mutex received. ready to start msg handler started~n"),
 	    message_handler:start_link(Piece_storage_pid, Sock, Peer_id)
+	    
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->

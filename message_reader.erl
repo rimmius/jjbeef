@@ -2,43 +2,40 @@
 -export([start/2]).
 -export([loop/2]).
 
-start(Parent, Peer_id) ->
-    spawn(?MODULE, loop, [Parent, Peer_id]).
+start(Piece_mutex_pid, Peer_id) ->
+    spawn(?MODULE, loop, [Piece_mutex_pid, Peer_id]).
 
-loop(Parent, Peer_id) ->
+loop(Piece_mutex_pid, Peer_id) ->
     receive
 	{bitfield, Bitfield, Bitfield_len} ->
 	    io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
- 	    %%peer_storage:update_peer(Parent, Peer_id, bitfield, lol(<<Bitfield:Bitfield_len>>, 0)),
- 	    %%peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
-	{have, Piece_index} ->
-	    %%Old_bitfield = peer_storage:read_field(Parent, Peer_id, bitfield),
-	    %%peer_storage:received(Parent),
-	    %%New_bitfield = lists:keyreplace(Piece_index, 2, Old_bitfield, {1, Piece_index}),
-	    %%peer_storage:update_peer(Parent, Peer_id, bitfield, New_bitfield),
-	    %%peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
+	    mutex:request(Piece_mutex_pid, insert_bitfield, [Peer_id, lol(<<Bitfield:Bitfield_len>>, 0)]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
+	{have, _Piece_index} ->
+%%	    mutex:request(Piece_mutex_pid, update_bitfield, [Peer_id, Piece_index]),
+%%	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
 	{choked, 1} ->
-	    peer_storage:update_peer(Parent, Peer_id, choke, 1),
-	    peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
+	    mutex:request(Piece_mutex_pid, request, [Peer_id, choke, 1]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
 	{choked, 0} ->
-	    peer_storage:update_peer(Parent, Peer_id, choke, 0),
-	    peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
+	    mutex:request(Piece_mutex_pid, request, [Peer_id, choke, 0]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
 	{interested, 1} ->
-	    peer_storage:update_peer(Parent, Peer_id, interested, 1),
-	    peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
+	    mutex:request(Piece_mutex_pid, request, [Peer_id, interested, 1]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
 	{interested, 0} ->
-	    peer_storage:update_peer(Parent, Peer_id, interested, 0),
-	    peer_storage:received(Parent),
-	    loop(Parent, Peer_id);
+	    mutex:request(Piece_mutex_pid, request, [Peer_id, interested, 0]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id);
 	{port, Listen_port} ->
-	    peer_storage:update_peer(Parent, Peer_id, port, Listen_port),
-	    peer_storage:received(Parent),
-	    loop(Parent, Peer_id)
+	    mutex:request(Piece_mutex_pid, request, [Peer_id, port, Listen_port]),
+	    mutex:received(Piece_mutex_pid),
+	    loop(Piece_mutex_pid, Peer_id)
     end.
 
 lol(<<P:1>>, Index) ->

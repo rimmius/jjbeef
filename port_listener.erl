@@ -32,7 +32,7 @@ recv(Socket, Dl_pid, Parent) ->
 		       Peer_id:160>>} ->
 		    %% Handshake reader
 		    %% --------------------------	
-		    io:format("Got Handshake! Handshanke_handler started~n"),
+		    io:format("Got Handshake! handshanke_handler started~n"),
 		    Pid_h = handshake_handler:start(Dl_pid),
 		    Pid_h ! {handshake, self(), Reserved, <<Info_hash:160>>, Peer_id},
 		    io:format("Waiting for Handshake handler reply~n"),

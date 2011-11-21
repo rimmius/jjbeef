@@ -7,104 +7,59 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/4, init/4]).
--export([send_bitfield/2, make_bitfield/2]).
+-behaviour(gen_fsm).
+-export([start_link/3, send/3, done/1]).
+-export([idle/2, busy/2, init/1, handle_event/3, handle_info/3]).
 
-start(Parent, Fs_pid, Socket, Peer_id) ->
-    spawn(?MODULE, init, [Parent, Fs_pid, Socket, Peer_id]).
+start_link(Piece_mutex_pid, Socket, Peer_id) ->
+    io:format("~nFSM STAREDDDDDD~n"),
+    gen_fsm:start_link(?MODULE, 
+		       {Piece_mutex_pid, Socket, Peer_id},
+		       []).
 
-init(Parent, Fs_pid, Socket, Peer_id) ->
-    Pid_message_reader = message_reader:start(Parent, Peer_id),
-    send_bitfield(Socket, file_storage:get_bitfield(Fs_pid)),
-    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader).
+init({Piece_mutex_pid, Socket, Peer_id}) ->
+    io:format("~ngoing to idle state~n"),
+    {ok, idle, {Piece_mutex_pid, Socket, Peer_id}}.
 
-recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader) ->    
-    case gen_tcp:recv(Socket, 4) of
-	%% case {ok, Socket} of %% for testing
-	{ok, <<0,0,0,0>>} ->
-	    %% keep-alive
-	    io:format("~n~n**********keep-alive len=0 ~n"),
-	    Parent ! {reply, self(), "Replied"},
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, <<0,0,0,1>>} ->
-	    case gen_tcp:recv(Socket, 1) of
-		{ok, <<0>>} ->
-		    %%choke
-		    io:format("~n*****Choke len=1, id=0~n"),
-		    Pid_message_reader ! {choke, 1};
-		{ok, <<1>>} ->
-		    %% unchoke
-		    io:format("~n*****Unchoke len=1, id=1~n"),
-		    Pid_message_reader ! {choke, 0};
-		{ok, <<2>>} ->
-		    %% interested
-		    io:format("~n*****Interested len=1, id=2~n"),
-		    Pid_message_reader ! {interested, 1};
-		{ok, <<3>>} ->
-		    %% uninterested
-		    io:format("~n*****Uninterested len=1, id=3~n"),
-		    Pid_message_reader ! {interested, 0}
-	    end,
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, <<0,0,0,5>>} ->
-	    case gen_tcp:recv(Socket, 5) of
-		{ok, <<4, Piece_index:32>>} ->
-		    %%have
-		    io:format("~n*****Have len=5, id=4, piece_index=~w msg_handler: ~w~n", [Piece_index, self()]),
-		    Pid_message_reader ! {have, Piece_index}
-	    end,
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, <<0,0,0,13>>} ->
-	    case gen_tcp:recv(Socket, 13) of
-		{ok, <<6, Index:32, Begin:32, Length:32>>} ->
-		    %%request
-		    io:format("~n*****Request len=13, id=6, index=~w, begin=~w, length=~w~n", [Index, Begin, Length]);
-		{ok, <<8, Index:32, Begin:32, Length:32>>} ->
-		    %%cancel
-		    io:format("~n*****Cancel len=13, id=8, index=~w, begin=~w, length=~w~n", [Index, Begin, Length])
-	    end,
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, <<0,0,0,3>>} ->
-	    case gen_tcp:recv(Socket, 3) of
-		{ok, <<9, Listen_port:16>>} ->
-		    %%port
-		    io:format("~n*****Port len=3, id=9, listen_port=~w msg_handler: ~w~n", [Listen_port, self()])
-	    end,
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, <<Len:32/integer-big>>} ->
-	    Bitfield_len = Len*8-8,
-	    Block_len = Len*8-72,
-	    case gen_tcp:recv(Socket, Len) of
-		{ok, <<5, Bitfield:Bitfield_len>>} ->
-		    %%bitfield
-		    io:format("~n*****bitfield len=1+~w, id=5, bitfield=~w msg_handler: ~w~n", [Len-1, Bitfield, self()]),
-		   Pid_message_reader ! {bitfield, Bitfield, Bitfield_len};
-		{ok, <<7, Index:32, Begin:32, Block:Block_len>>} ->
-		    %%piece
-		    io:format("~n*****piece len=9+~w, id=7, index=~w, begin=~w, block=~w~n", [Len-9, Index, Begin, Block])
-	    end,
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader);
-	{ok, _Data} ->
-	    io:format("~nother messages, cannot read~n"),
-	    recv_loop(Parent, Fs_pid, Socket, Peer_id, Pid_message_reader); %% not sure
-	{error, Reason} ->
-	    io:format("~nmessage receiving error: ~w~n", [Reason]);
-	_ ->
-	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n")
+send(Pid, Type, Msg) ->
+    gen_fsm:send_all_state_event(Pid, {start_sending, Type, Msg}).
+
+done(Pid) ->
+    gen_fsm:send_event(Pid, {msg_done, self()}).
+
+handle_event({start_sending, Type, Msg}, idle, 
+	     {Piece_mutex_pid, Socket, Peer_id}) -> 
+    Msg_sender_pid = message_sender:start(self(), Socket, Type, Msg),
+    {next_state, busy, {Piece_mutex_pid, Socket, Peer_id, Msg_sender_pid,
+			[]}};
+handle_event({start_sending, Type, Msg}, busy, 
+	     {Piece_mutex_pid, Socket, Peer_id, Msg_pid, Send_requests}) ->     
+    {next_state, busy, {Piece_mutex_pid, Socket, Peer_id, Msg_pid,
+			[{Type, Msg} | Send_requests]}}.
+
+handle_info({'EXIT', Msg_pid, _Reason}, busy,
+	    {Piece_mutex_pid, Socket, Peer_id, Msg_pid, Send_requests}) ->
+    case Send_requests of 
+	[] ->
+	    {next_state, idle, {Piece_mutex_pid, Socket, Peer_id}, 1000};
+	[{Type, Msg} | Rest] ->
+	    New_sender = message_sender:start(self(), Socket, Type, Msg),
+	    {next_state, busy, {Piece_mutex_pid, Socket, Peer_id, New_sender, 
+				Rest}}
     end.
 
-send_bitfield(Socket, Bitfield_in_list) ->
-    {Bitfield_in_bits, Len} = make_bitfield(Bitfield_in_list, 1),
-    Msg = <<(Len+1):32/integer-big, 5, Bitfield_in_bits/bitstring>>,  
-    io:format("~w~n", [Msg]),
-    gen_tcp:send(Socket, Msg).
+idle(timeout, {Piece_mutex_pid, Socket, Peer_id}) ->    
+    Msg_recver_pid = message_receiver:start(self(), Piece_mutex_pid, Socket, Peer_id),
+    {next_state, busy, {Piece_mutex_pid, Socket, Peer_id, Msg_recver_pid, 
+			[]}}.
 
-make_bitfield([H], Index) when Index rem 8 == 0 ->
-    {<<H:1>>, Index div 8};
-make_bitfield([H], Index) ->
-    {Rest, X} = make_bitfield([0], Index+1),
-    {list_to_bitstring([<<H:1>>, <<Rest/bits>>]), X};
-make_bitfield([H|T], Index) ->
-    {Rest, X} = make_bitfield(T, Index+1),
-    {list_to_bitstring([<<H:1>>, <<Rest/bits>>]), X}.
-
+busy({msg_done, Msg_pid}, 
+     {Piece_mutex_pid, Socket, Peer_id, Msg_pid, Send_requests}) ->
+    case Send_requests of 
+	[] ->
+	    {next_state, idle, {Piece_mutex_pid, Socket, Peer_id}, 1000};
+	[{Type, Msg} | Rest] ->
+	    Msg_sender_pid = message_sender:start(self(), Socket, Type, Msg),
+	    {next_state, busy, {Piece_mutex_pid, Socket, Peer_id, Msg_sender_pid, 
+				Rest}}
+    end.
