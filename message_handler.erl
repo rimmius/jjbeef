@@ -19,7 +19,7 @@ start_link(Piece_mutex_pid, Socket, Peer_id) ->
 
 init({Piece_mutex_pid, Socket, Peer_id}) ->
     io:format("~ngoing to idle state~n"),
-    {ok, idle, {Piece_mutex_pid, Socket, Peer_id}}.
+    {ok, idle, {Piece_mutex_pid, Socket, Peer_id}, 1000}.
 
 send(Pid, Type, Msg) ->
     gen_fsm:send_all_state_event(Pid, {start_sending, Type, Msg}).
