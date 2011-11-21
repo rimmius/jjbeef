@@ -1,10 +1,9 @@
-%%% Created by: Francesco Cesarini,Simon Thompson 
-%%% from the book Erlang Programming page 130 
-%%% Modified by: Eva-Lisa Kedborn, Jing Liu
+%%% Created by: Eva-Lisa Kedborn, Jing Liu
 %%% Creation date: 2011-11-08
+%%% This module creates a table which stores peer info.
 
 -module(peer_storage).
--export([start/0,init/0,stop/1]).
+-export([start/0,init/0]).
 
 -record(peer, {peerid = undefined, interested = 0, choke = 1, 
 	       ip = undefined, socket = undefined,
@@ -16,9 +15,6 @@ start() ->
 init() ->
     Tid = ets:new(db, [{keypos, #peer.peerid}]),
     loop(Tid).
-
-stop(Pid) ->
-    Pid ! stop.
 
 loop(Tid) ->
     receive
