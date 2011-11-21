@@ -2,30 +2,35 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/1, insert_new_peers/4, insert_valid_peer/3, 
+-export([start/2, insert_new_peers/4, insert_valid_peer/3, 
 	 insert_peers_later/3]).
--export([init/1]).
+-export([init/2]).
 
 %%Starts the peers module and hands back the pid
-start(List_of_pieces) ->
-    spawn(peers, init, [List_of_pieces]).
+start(List_of_pieces, Name_of_files) ->
+    spawn(peers, init, [List_of_pieces, Name_of_files]).
 
 %%Starts the Mutex and stores the pid of it in the loop
-init(List_of_pieces) ->
-    Peer_storage_pid = peer_storage:start(),
-    link(Peer_storage_pid),
-    Piece_storage_pid = piece_storage:start(List_of_pieces),
-    link(Piece_storage_pid),
-    File_storage_pid = file_storage:start(self(), [], length(List_of_pieces)),
-    link(File_storage_pid),
-    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid).
+init(List_of_pieces, Name_of_files) ->
+    Mutex_pid = mutex:start(peer_storage, []),
+    link(Mutex_pid),
 
-loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid) ->
+    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces]),
+    link(Piece_storage_pid),
+
+    Dl_storage_pid = mutex:start(downloading_storage, []),
+    link(Dl_storage_pid),
+
+    File_storage_pid = file_storage:start(Dl_storage_pid, Name_of_files, length(List_of_pieces)),
+    link(File_storage_pid),
+    loop(Mutex_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid).
+
+loop(Mutex_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
     receive
 	{get_storage, From} ->
-	    From ! {reply, {Peer_storage_pid, File_storage_pid, 
-			    Piece_storage_pid}},
-	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid);
+	    From ! {reply, {Mutex_pid, File_storage_pid, 
+			    Piece_storage_pid, Dl_storage_pid}},
+	    loop(Mutex_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case gen_tcp:connect(Host, Port, [binary, {active, false},
 					      {packet, 0}], 1000) of
@@ -36,21 +41,24 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid) ->
 		    ok = gen_tcp:send(Sock, Msg),
 		    io:format("Sent handshake to peer from tracker~n"),
 		    From ! {reply, ok, Sock},
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid);
+		    loop(Mutex_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
 		{error, Reason} ->
 		    io:format(Reason),
 		    From ! {error, Reason},
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid)
+		    loop(Mutex_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid)
 	    end;
-	{'EXIT', Peer_storage_pid, Reason} -> 
+	{'EXIT', Mutex_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without peer_storage");		
+	    io:format("looping without peer_storage"),
+	    loop(mutex_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid);		
 	{'EXIT', Piece_storage_pid, Reason} ->
 	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without piece_storage");
+	    io:format("looping without piece_storage"),
+	    loop(Mutex_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid);
 	{'EXIT', File_storage_pid, Reason} ->
 	    io:format("exit file_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without file_storage")
+	    io:format("looping without file_storage"),
+	    loop(Mutex_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid)
     end.
 
 insert_new_peers(List_raw, Peers_pid, Dl_pid, Tracker_pid) ->
@@ -150,13 +158,11 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
     receive
-	{reply, {Peer_storage_pid, File_storage_pid, Piece_storage_pid}} ->
-	    io:format("~n~n~nGot T_id and Mutex pid~n~n~n"),
-	    peer_storage:insert_new_peer(Peer_storage_pid, Host,Peer_id, 
-					 Sock, Port),
-	    peer_storage:received(Peer_storage_pid),
-	    message_handler:start(Peer_storage_pid,File_storage_pid, 
-				  Piece_storage_pid, Sock, Peer_id)
+	{reply, {Mutex_pid, _File_storage_pid, Piece_storage_pid, _Dl_storage_pid}} ->
+	    mutex:request(Mutex_pid, insert_new_peer, [Host,Peer_id, 
+					 Sock, Port, undefined]),
+	    mutex:received(Mutex_pid),
+	    message_handler:start_link(Piece_storage_pid, Sock, Peer_id)
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->

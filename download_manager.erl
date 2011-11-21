@@ -65,37 +65,38 @@ store_info({dict,Dict}, My_id) ->
     case dict:find(<<"files">>, Info_dict) of
 	{ok, {_,Files_dict}} ->
 	    set_up_tracker(Info, Tracker_list, get_length(Files_dict, 0), 
-			   {dict, Dict}, List_of_pieces, My_id);
+			   {dict, Dict}, List_of_pieces, My_id, ["No_functionality_for_this_yet"]); %%%Multiple files
 	error ->
+	    Name_of_files = dict:fetch(<<"name">>, Info_dict),
 	    set_up_tracker(Info, Tracker_list, dict:fetch(<<"length">>, 
-			      Info_dict), {dict, Dict}, List_of_pieces, My_id)
+			      Info_dict), {dict, Dict}, List_of_pieces, My_id, [binary_to_list(Name_of_files)])
     end.
 get_length([], Total) ->
     Total;
 get_length([{_,H}|T], Total) ->
     {ok, Value} = dict:find(<<"length">>,H),
     get_length(T, Total+Value).
-set_up_tracker(Info, List, Length, {dict, Dict}, List_of_pieces, My_id) ->
+set_up_tracker(Info, List, Length, {dict, Dict}, List_of_pieces, My_id, Name_of_files) ->
     Announce_list = connect_to_tracker:make_list(List, []),
     case Announce_list of
 	[] ->
 	    Announce = dict:fetch(<<"announce">>, Dict),
-	    send_to_tracker(Info, Announce, Length, List_of_pieces, My_id);
+	    send_to_tracker(Info, Announce, Length, List_of_pieces, My_id, Name_of_files);
 	_ ->
-	    send_to_tracker(Info, Announce_list, Length, List_of_pieces, My_id)
+	    send_to_tracker(Info, Announce_list, Length, List_of_pieces, My_id, Name_of_files)
     end.
-send_to_tracker(_Info, [], _Length, _List_of_pieces, _My_id) ->
+send_to_tracker(_Info, [], _Length, _List_of_pieces, _My_id, _Name_of_files) ->
     exit(self(), kill);
-send_to_tracker(Info, [H|T], Length, List_of_pieces, My_id) ->
+send_to_tracker(Info, [H|T], Length, List_of_pieces, My_id, Name_of_files) ->
     Tracker_pid = connect_to_tracker:start(),
     link(Tracker_pid),
     Tracker_pid ! {connect, self(), {Info, H, Length}, My_id},
     receive
 	{ok, Peers} ->
-	    connect_to_peers(Info, List_of_pieces, Peers, My_id, Tracker_pid)
+	    connect_to_peers(Info, List_of_pieces, Peers, My_id, Tracker_pid, Name_of_files)
     after 2000 ->
 	    io:format("connecting to next tracker in list ~n"),
-	    send_to_tracker(Info, T, Length, List_of_pieces, My_id)
+	    send_to_tracker(Info, T, Length, List_of_pieces, My_id, Name_of_files)
     end.
 handle_pieces([], Piece_list, Byte, New_list) ->
     lists:reverse([lists:reverse(Piece_list)|New_list]);
@@ -104,8 +105,8 @@ handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
 handle_pieces(List, Piece_list, _Byte, New_list)  ->
     handle_pieces(List,[], 1, [lists:reverse(Piece_list)|New_list]).
 
-connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid) ->
-    Peers_pid = peers:start(List_of_pieces),
+connect_to_peers(Info, List_of_pieces, List_of_peers, My_id, Tracker_pid, Name_of_files) ->
+    Peers_pid = peers:start(List_of_pieces, Name_of_files),
     link(Peers_pid),
     Info2 = list_to_binary(sha:sha1raw(Info)),
     Dl_pid = spawn(fun() -> loop(Info2, My_id) end),

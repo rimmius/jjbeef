@@ -3,32 +3,33 @@
 -module(file_storage).
 -export([start/3, init/3, get_bitfield/1, insert_piece/3]).
 
-start(Parent, Files, Length) ->
-    spawn(?MODULE, init, [Parent, Files, Length]).
+start(Dl_storage_pid, Files, Length) ->
+    spawn(?MODULE, init, [Dl_storage_pid, Files, Length]).
 
-init(Parent, Files, Length) ->
+init(Dl_storage_pid, Files, Length) ->
     Data = initiate_data(1, Length),
     Table_id = ets:new(torrent, [ordered_set]),
-    loop(Parent, Files, Data, Table_id, Length).
+    loop(Dl_storage_pid, Files, Data, Table_id, Length).
 
 initiate_data(Nr, Length) when Nr =< Length ->
     [0|initiate_data(Nr+1, Length)];
 initiate_data(_Nr, _Length) ->
     [].
 
-loop(Parent, Files, Data, Table_id, Length) ->
+loop(Dl_storage_pid, [H|T], Data, Table_id, Length) ->
     receive
 	{bitfield, From} ->
 	    Bitfield = generate_bitfield(1, Length, Table_id),
 	    From ! {reply, Bitfield},
-	    loop(Parent, Files, Bitfield, Table_id, Length);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length);
 	{insert, From, {Index, Piece}} ->
 	    ets:insert(Table_id, {Index, Piece}),
-	    {ok , Io} = file:open("baba.txt", [write]),
+	    {ok , Io} = file:open(H, [write]),
 	    ok =  write_to_file(Table_id, 1, Length, Io),
 	    ok = file:close(Io),
+	    %%mutex:request(Dl_storage_pid, delete, [Index]),
 	    From ! {reply, ok},
-	    loop(Parent, Files, Data, Table_id, Length)
+	    loop(Dl_storage_pid, [H|T], Data, Table_id, Length)
     end.
 
 generate_bitfield(Acc, Length, Table_id) when Acc =< Length ->
