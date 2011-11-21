@@ -24,13 +24,19 @@ received(MutexPid)->
 
 request(MutexPid, Function, Args) ->
     MutexPid ! {Function, Args, self()},
-    receive {reply, Reply} -> Reply end.
+    receive 
+	{reply, Reply} -> 
+	    Reply 
+    end.
 
 free(StoragePid) ->
     receive
 	{Function, Args, ClientPid} ->
 	    StoragePid ! {request, Function, Args, self()},
-	    receive {reply, Reply} -> ClientPid ! Reply end,
+	    receive 
+		{reply, Reply} -> 
+		    ClientPid ! {reply, Reply} 
+	    end,
 	    busy(ClientPid, StoragePid);
 	stop -> terminate(StoragePid)
     end.
@@ -38,6 +44,7 @@ free(StoragePid) ->
 busy(ClientPid, StoragePid) ->
     receive
 	{received, ClientPid} ->
+	    io:format("~n~n~nGOING FROM BUSY TO FREE~n~n~n"),
 	    free(StoragePid)
     end.
 
