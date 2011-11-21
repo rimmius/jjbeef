@@ -27,7 +27,7 @@ write_file(MutexPid, Index, Hash, Data)->
     end.
 
 %% send peer info to mutex for storage in db
-write_new_peer(MutexPid, Ip, PeerId, Socket, Port) ->
+write_new_peer(MutexPid, Ip, PeerId, Socket, Port, self()) ->
     MutexPid ! {write_new_peer, Ip, PeerId, Socket, Port, self()},
     receive {reply, Reply} -> 
 	    Reply
