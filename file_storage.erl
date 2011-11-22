@@ -16,10 +16,9 @@ initiate_data(Nr, Length) when Nr =< Length ->
 initiate_data(_Nr, _Length) ->
     [].
 
-loop(Dl_storage_pid, [H|T], Data, Table_id, Length, Piece_length) ->
+loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
     receive
 	{bitfield, From} ->
-	    Bitfield = generate_bitfield(1, Length, Table_id, Piece_length),
 	    From ! {reply, Bitfield},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
 	{insert_chunk, From, Index, Begin, Block} ->
@@ -32,13 +31,14 @@ loop(Dl_storage_pid, [H|T], Data, Table_id, Length, Piece_length) ->
 		    ets:insert(Chunk_table_id, {Begin, Block})
 	    end,
 	    From ! {reply, {Table_id, Piece_length}},
-	    loop(Dl_storage_pid, [H|T], Data, Table_id, Length, Piece_length);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
 	{write_to_file, From} ->
 	    {ok , Io} = file:open(H, [write]),
 	    ok =  write_to_file(Table_id, 1, Length, Io, Piece_length),
 	    ok = file:close(Io),
+	    New_bitfield = generate_bitfield(1, Length, Table_id, Piece_length),
 	    From ! {reply, ok},
-	    loop(Dl_storage_pid, [H|T], Data, Table_id, Length, Piece_length)
+	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length)
     end.
 
 generate_bitfield(Acc, Length, Table_id, Piece_length) when Acc =< Length ->
