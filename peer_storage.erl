@@ -3,7 +3,7 @@
 %%% This module creates a table which stores peer info.
 
 -module(peer_storage).
--export([start/0,init/0]).
+-export([start/0, init/0]).
 
 -record(peer, {peerid = undefined, interested = 0, choke = 1, 
 	       ip = undefined, socket = undefined,
@@ -18,37 +18,39 @@ init() ->
 
 loop(Tid) ->
     receive
-	{request,Function,Args,From}->
+	{request, Function, Args, From}->
 	    case Function of
 		insert_new_peer->
-		    [Ip,PeerId,Socket,Port,Request]=Args,
-		    Reply = insert_new_peer(Tid,Ip,PeerId,Socket,Port,Request);
+		    [Ip, PeerId, Socket, Port, Request] = Args,
+		    Reply = insert_new_peer(Tid, Ip, PeerId, Socket,
+					    Port, Request);
 		update_peer->
-		    [PeerId,Field,Value] = Args,
-		    Reply = update_peer(Tid,PeerId,Field,Value);
+		    [PeerId, Field, Value] = Args,
+		    Reply = update_peer(Tid, PeerId, Field, Value);
 		read_field->
 		    [PeerId,Field] = Args,
-		    Reply = read_field(Tid,PeerId,Field)
+		    Reply = read_field(Tid, PeerId, Field)
 	    end,
-	    From!{reply,Reply},
+	    From ! {reply, Reply},
 	    loop(Tid);
 	stop -> ok
     end.
 
 %% insert peer for the first time.
-insert_new_peer(Tid, Ip, PeerId, Socket, Port,Request) -> 
+insert_new_peer(Tid, Ip, PeerId, Socket, Port, Request) -> 
     ets:insert(Tid, #peer{peerid = PeerId, interested = 0, choke = 1,
-			  ip = Ip, socket = Socket, port = Port,request = Request}).
+			  ip = Ip, socket = Socket, port = Port,
+			  request = Request}).
 
 %% update certain peer fields
-update_peer(Tid,PeerId, Field, Value) ->
+update_peer(Tid, PeerId, Field, Value) ->
     case Field of
 	interested -> ets:insert(Tid, #peer{peerid = PeerId, 
 					   interested = Value});
 	choke -> ets:insert(Tid, #peer{peerid = PeerId, choke = Value});
 	socket -> ets:insert(Tid, #peer{peerid = PeerId, socket = Value});
 	port -> ets:insert(Tid, #peer{peerid = PeerId, port = Value});
-	request -> ets: insert(Tid, #peer{peerid = PeerId,request = Value})
+	request -> ets: insert(Tid, #peer{peerid = PeerId, request = Value})
     end.
 
 %% read certain peer fields and return their value
