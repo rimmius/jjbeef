@@ -2,16 +2,16 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/2, insert_new_peers/4, insert_valid_peer/3, 
+-export([start/3, insert_new_peers/4, insert_valid_peer/3, 
 	 insert_peers_later/3]).
--export([init/2]).
+-export([init/3]).
 
 %%Starts the peers module and hands back the pid
-start(List_of_pieces, Name_of_files) ->
-    spawn(peers, init, [List_of_pieces, Name_of_files]).
+start(List_of_pieces, Name_of_files, Piece_length) ->
+    spawn(peers, init, [List_of_pieces, Name_of_files, Piece_length]).
 
 %%Starts the Mutex and stores the pid of it in the loop
-init(List_of_pieces, Name_of_files) ->
+init(List_of_pieces, Name_of_files, Piece_length) ->
     Peer_storage_pid = mutex:start(peer_storage, []),
     link(Peer_storage_pid),
 
@@ -21,7 +21,7 @@ init(List_of_pieces, Name_of_files) ->
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
 
-    File_storage_pid = file_storage:start(Dl_storage_pid, Name_of_files, length(List_of_pieces)),
+    File_storage_pid = file_storage:start(Dl_storage_pid, Name_of_files, length(List_of_pieces), Piece_length),
     link(File_storage_pid),
     loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid).
 
@@ -159,14 +159,9 @@ insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {get_storage, self()},
     receive
 	{reply, {Peer_storage_pid, _File_storage_pid, Piece_storage_pid, _Dl_storage_pid}} ->
-	    io:format("~n ready to request to mutex~n"),
 	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 					 Sock, Port, undefined]),
-	    io:format("~n mutex request done~n"),
-
 	    mutex:received(Peer_storage_pid),
-
-	    io:format("~n mutex received. ready to start msg handler started~n"),
 	    message_handler:start_link(Piece_storage_pid, Sock, Peer_id)
 	    
     end.
