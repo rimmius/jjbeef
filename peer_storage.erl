@@ -27,6 +27,9 @@ loop(Tid) ->
 		update_peer->
 		    [PeerId, Field, Value] = Args,
 		    Reply = update_peer(Tid, PeerId, Field, Value);
+		delete_peer->
+		    PeerId=Args,
+		    Reply = delete_peer(Tid,PeerId);
 		read_field->
 		    [PeerId,Field] = Args,
 		    Reply = read_field(Tid, PeerId, Field)
@@ -52,6 +55,10 @@ update_peer(Tid, PeerId, Field, Value) ->
 	port -> ets:insert(Tid, #peer{peerid = PeerId, port = Value});
 	request -> ets: insert(Tid, #peer{peerid = PeerId, request = Value})
     end.
+
+%% delete a peer 
+delete_peer(Tid,PeerId)->
+    ets:delete(Tid,PeerId).
 
 %% read certain peer fields and return their value
 read_field(Tid, PeerId, Field) ->
