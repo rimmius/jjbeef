@@ -8,7 +8,7 @@ start(Piece_mutex_pid, Peer_id) ->
 loop(Piece_mutex_pid, Peer_id) ->
     receive
 	{bitfield, Bitfield, Bitfield_len} ->
-	    io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
+	    %%io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
 	    mutex:request(Piece_mutex_pid, insert_bitfield, [Peer_id, lol(<<Bitfield:Bitfield_len>>, 0)]),
 	    mutex:received(Piece_mutex_pid),
 	    loop(Piece_mutex_pid, Peer_id);

@@ -1,14 +1,23 @@
 -module(message_sender).
--export([start/4]).
--export([do_send/4]).
+-export([start/2, send/3]).
+-export([loop/2, do_send/3]).
 
-start(Parent, Socket, Type, Msg) ->
-    spawn(?MODULE, do_send, [Parent, Socket, Type, Msg]).
+start(Parent, Socket) ->
+    spawn(?MODULE, loop, [Parent, Socket]).
 
-%%init(Parent, Socket, Type, Msg) ->
-%%    do_send(Parent, Socket, Type, Msg).
+send(Pid, Type, Msg) ->
+    Pid ! {do_send, Type, Msg, self()},
+    ok.
 
-do_send(Parent, Socket, Type, Msg) ->
+loop(Parent, Socket) ->
+    receive
+	{do_send, Type, Msg, Parent} ->
+	    do_send(Socket, Type, Msg),
+	    message_handler:done(Parent),
+	    loop(Parent, Socket)
+    end.
+
+do_send(Socket, Type, Msg) ->
     case {Type, Msg} of 
 	{keep_alive, _} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,0>>);
@@ -42,8 +51,7 @@ do_send(Parent, Socket, Type, Msg) ->
 	{port, [Listen_port]} ->
 	    ok = gen_tcp:send(Socket,
 			      <<0,0,0,3,9,Listen_port:16>>)
-    end,		    
-    message_handler:done(Parent).
+    end.
 
 handle_bitfield(Bitfield_in_list) ->
     {Bitfield_in_bits, Len} = make_bitfield(Bitfield_in_list, 1),
