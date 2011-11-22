@@ -84,10 +84,10 @@ insert_chunk(File_storage_pid, Index, Begin, Block) ->
 write_to_file(Table_id, Acc, Length, Io, Piece_length) when Acc =< Length ->
     case ets:lookup(Table_id, Acc) of
 	[] ->
-	    write_to_file(Table_id, Acc+16384, Length, Io, Piece_length);
+	    write_to_file(Table_id, Acc+1, Length, Io, Piece_length);
 	[{Acc, Chunk_table_id}]  ->
 	    write_out_chunks(Chunk_table_id, 1, Piece_length, Io),
-	    write_to_file(Table_id, Acc+16384, Length, Io, Piece_length)
+	    write_to_file(Table_id, Acc+1, Length, Io, Piece_length)
     end;
 write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
     ok.
@@ -95,10 +95,10 @@ write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
 write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc =< Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
-	    write_out_chunks(Chunk_table_id, Acc+1, Piece_length, Io);
+	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
 	[{Acc, Chunk}] ->
 	    file:write(Io, Chunk),
-	    write_out_chunks(Chunk_table_id, Acc+1, Piece_length, Io)
+	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io)
     end;
 write_out_chunks(_Chunk_table_id, _Acc, _Piece_length, _Io) ->
     ok.
