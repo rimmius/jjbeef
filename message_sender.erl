@@ -6,12 +6,12 @@ start(Parent, Socket) ->
     spawn(?MODULE, loop, [Parent, Socket]).
 
 send(Pid, Type, Msg) ->
-    Pid ! {do_send, Type, Msg, self()},
+    Pid ! {do_send, Type, Msg},
     ok.
 
 loop(Parent, Socket) ->
     receive
-	{do_send, Type, Msg, Parent} ->
+	{do_send, Type, Msg} ->
 	    do_send(Socket, Type, Msg),
 	    message_handler:done(Parent),
 	    loop(Parent, Socket)

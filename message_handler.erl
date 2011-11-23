@@ -10,15 +10,15 @@
 -export([start_link/3, send/3, done/1, error/2]).
 -export([loop/5, init/3]).
 
-start_link(Piece_mutex_pid, Socket, Peer_id) ->
+start_link(Peer_mutex_pid, Socket, Peer_id) ->
     io:format("~nMsg_handler started. ~n"),
     spawn(?MODULE, init,
-	  [Socket, Peer_id, Piece_mutex_pid]).
+	  [Socket, Peer_id, Peer_mutex_pid]).
 
 %%done
-init(Socket, Peer_id, Piece_mutex_pid) ->
+init(Socket, Peer_id, Peer_mutex_pid) ->
     io:format("~nmsg handler goes receiving!~n"),
-    Msg_recver_pid = message_receiver:start(self(), Piece_mutex_pid, Socket, Peer_id),
+    Msg_recver_pid = message_receiver:start(self(), Peer_mutex_pid, Socket, Peer_id),
     Msg_sender_pid = message_sender:start(self(), Socket),
     ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).

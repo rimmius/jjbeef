@@ -10,14 +10,14 @@
 -export([start/4, start_receiving/1]).
 -export([init/4, loop/3]).
 
-start(Parent, Piece_mutex_pid, 
+start(Parent, Peer_mutex_pid, 
       Socket, Peer_id) ->
-    spawn(?MODULE, init, [Parent, Piece_mutex_pid, 
+    spawn(?MODULE, init, [Parent, Peer_mutex_pid, 
 			  Socket, Peer_id]).
 
-init(Parent, Piece_mutex_pid, 
+init(Parent, Peer_mutex_pid, 
      Socket, Peer_id) ->
-    Msg_reader_pid = message_reader:start(Piece_mutex_pid, Peer_id),
+    Msg_reader_pid = message_reader:start(Peer_mutex_pid, Peer_id),
     loop(Parent, Socket, Msg_reader_pid).
 
 start_receiving(Pid) ->
@@ -118,7 +118,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    message_handler:error(Parent, self());
 	    %%do_recv(Socket, Pid_message_reader); %% not sure
 	{error, Reason} ->
-	    io:format("~nmessage receiving error: ~w~n", [Reason]),
+	    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
 	    message_handler:error(Parent, self());	    
 	_ ->
 	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n"),
