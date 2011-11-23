@@ -2,16 +2,15 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/3, insert_new_peers/4, insert_valid_peer/3, 
-	 insert_peers_later/3]).
--export([init/3]).
+-export([start/5, insert_new_peers/3, insert_valid_peer/3]).
+-export([init/6]).
 
 %%Starts the peers module and hands back the pid
-start(List_of_pieces, Name_of_files, Piece_length) ->
-    spawn(peers, init, [List_of_pieces, Name_of_files, Piece_length]).
+start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names}) ->
+    spawn(peers, init, [Dl_pid, Tracker_list, Pieces, Piece_length, Length, File_names]).
 
 %%Starts the Mutex and stores the pid of it in the loop
-init(List_of_pieces, Name_of_files, Piece_length) ->
+init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
     Peer_storage_pid = mutex:start(peer_storage, []),
     link(Peer_storage_pid),
 
@@ -21,10 +20,28 @@ init(List_of_pieces, Name_of_files, Piece_length) ->
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
 
-    File_storage_pid = file_storage:start(Dl_storage_pid, Name_of_files, length(List_of_pieces), Piece_length),
+    File_storage_pid = file_storage:start(Dl_storage_pid, File_names, length(List_of_pieces), Piece_length),
     link(File_storage_pid),
+    Peers_pid = self(),
+    Port_listener_pid = port_listener:start(12345, Dl_pid, Peers_pid),
+    link(Port_listener_pid),
+   
+    Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
+    link(Tracker_pid),
+    spawn(fun() ->send_to_tracker(connect_to_tracker:make_list(Tracker_list, []), Tracker_pid, Peers_pid, Dl_pid) end),
     loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid).
 
+send_to_tracker([],  _Tracker_pid, _Peers_pid, _Dl_pid) ->
+    exit(self(), kill);
+send_to_tracker([H|T], Tracker_pid, Peers_pid, Dl_pid) ->
+    Tracker_pid ! {connect, self(), H},
+    receive
+	{ok, Peers} ->
+	    insert_new_peers(Peers, Peers_pid, Dl_pid)
+    after 2000 ->
+	    io:format("connecting to next tracker in list ~n"),
+	    send_to_tracker( T, Tracker_pid, Peers_pid, Dl_pid)
+    end.
 loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
     receive
 	{get_storage, From} ->
@@ -61,24 +78,12 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
 	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid)
     end.
 
-insert_new_peers(List_raw, Peers_pid, Dl_pid, Tracker_pid) ->
+insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
-    Port_listener_pid = port_listener:start(12345, Dl_pid, Peers_pid),
-    link(Port_listener_pid),
     Info_hash = download_manager:get_my_info_hash(Dl_pid),
     My_id = download_manager:get_my_id(Dl_pid),
     ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], 
-			     Peers_pid, Dl_pid),
-    connect_to_tracker:give_more(Peers_pid, Tracker_pid, Dl_pid).
-
-insert_peers_later(List_raw, Peers_pid, Dl_pid) ->
-    List_of_peers = make_peer_list(List_raw, "", 1, []),
-    Info_hash = download_manager:get_my_info_hash(Dl_pid),
-    My_id = download_manager:get_my_id(Dl_pid),    
-    io:format("~w~n", [Dl_pid]),
-    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], 
-			     Peers_pid, Dl_pid),
-    io:format("~n~nHANDSHAKED~n~n").
+			     Peers_pid, Dl_pid).
 
 handshake_all_peers([], _Info, _Peer_id, New_list, _Peers_pid, _Dl_pid) ->
     ok;

@@ -2,33 +2,31 @@
 %%%Creation date: 111007.
 %%%Info: Connects to specified tracker and retrieves info about the torrent specified.
 -module(connect_to_tracker).
--export([start/0, make_list/2, give_more/3]).
+-export([start/3, make_list/2, give_more/3]).
 %%Start function: spawn_links a new process to init function
-start() ->
-    spawn_link(fun() -> init() end).
+start(Dl_pid, Peers_pid, Length) ->
+    spawn_link(fun() -> init(Dl_pid, Peers_pid, Length) end).
 %%Init function waits for the first connect message and then
-init() ->
+init(Dl_pid, Peers_pid, Length) ->
+    Info_sha = sha:shaurl(download_manager:get_info_clean(Dl_pid)),
+    My_id = download_manager:get_my_id(Dl_pid),
+    loop(Info_sha, 10000, My_id, none, "12345", Length, Peers_pid, Dl_pid).
+loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid) ->
     receive
-	{connect,From, {Info, Tracker, Length}, My_id} ->
-	    Info_sha = sha:shaurl(Info),
-	    io:format(My_id),
-	    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info_sha  ++  "&peer_id=" ++ My_id ++ "&port=" ++ "12345" ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
+	{connect, From, H} ->
+	     io:format("connect to tracker~n"),
+	    io:format("~w~n", [H]),
+	    {Peers, Min_time} = get_info(H ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
 	    From ! {ok, Peers},
-	    loop(Info_sha, Min_time,My_id, Tracker, "12345",Length, false, false)
-    end.
-loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid) -> %%Change to get length from jing and eva later ::):):)
-    receive
-	{more_info, New_peers_pid, New_dl_pid} ->
-	    loop(Info, Time, My_id, Tracker, Port, Length, New_peers_pid, New_dl_pid) %%SAME SAME
+	    loop(Info, Min_time, My_id, H, Port, Length, Peers_pid, Dl_pid)
     after Time ->
-	    case {Peers_pid, Dl_pid} of
-		{false, false} ->
-		    io:format("Cant connect to tracker yet~n~n"),
-		    loop(Info, Time, My_id, Tracker, Port,Length, false, false);
-		{_, _} ->
+	    case Tracker of
+		none ->
+		    loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid);
+		_ ->
 		    io:format("connect to tracker~n"),
 		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
-		    spawn(peers, insert_peers_later, [Peers, Peers_pid, Dl_pid]),
+		    spawn(peers, insert_new_peers, [Peers, Peers_pid, Dl_pid]),
 		    loop(Info, Min_time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid)
 	    end
     end.	
