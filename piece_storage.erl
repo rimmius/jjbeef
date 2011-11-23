@@ -47,13 +47,13 @@ loop(piece_table)->
 	stop -> ok
     end.
 
-%% insert a new bitfield into the table
+%% insert a new peer that has one of the pieces we want into the table
 insert_bitfield(piece_table, PeerId, [H|T]) ->
     Has = [X || {1, X} <- [H|T]],
-    insert_to_table(Has, PeerId, piece_table).
+    insert_to_table(piece_table, Has, PeerId).
 
 %% inner function of insert_bitfield
-insert_to_table([Has|T], PeerId, piece_table) ->
+insert_to_table(piece_table, [Has|T], PeerId) ->
     [{Index, {Hash, Peers}}] = ets:lookup(piece_table, Has),
      ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
      insert_to_table(piece_table, T, PeerId);
@@ -99,15 +99,82 @@ initiate_table_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      initiate_table([a,b,c])
+	      initiate_table([hash0, hash1, hash2])
       end,
-      fun(_) ->
-	      ets:delete(piece_table) 
-      end,
-      [?_assertMatch([], ets:lookup(test, 3)),
-       ?_assertMatch([{0, {a, []}}], ets:lookup(test, 0))]
+      [?_assertMatch([], ets:lookup(piece_table, 3)),
+       ?_assertMatch([{0, {hash0, []}}], ets:lookup(piece_table, 0))]
      }
-    }.    
+    }.  
+
+insert_bitfield_test_() ->  
+    {spawn,
+     {setup,
+      fun() ->
+	      initiate_table([hash0, hash1, hash2]), 
+	      insert_bitfield(piece_table, peer1, [{1,0}, {1,1}, {0,2}])
+      end,
+      [?_assertMatch([{0, {hash0, [peer1]}}], ets:lookup(piece_table, 0)),
+       ?_assertMatch([{1, {hash1, [peer1]}}], ets:lookup(piece_table, 1)),
+       ?_assertMatch([{2, {hash2, []}}], ets:lookup(piece_table, 2)),
+       ?_assertError(badarg, ets:lookup(piece2_table, 2))]
+     }
+    }.
+
+update_bitfield_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      initiate_table([hash0, hash1, hash2]), 
+	      insert_bitfield(piece_table, peer1, [{1,0}, {1,1}, {0,2}]),
+	      update_bitfield(piece_table, peer2, 2),
+	      update_bitfield(piece_table, peer2, 0)
+      end,
+      [?_assertMatch([{2, {hash2, [peer2]}}], ets:lookup(piece_table, 2)),
+       ?_assertMatch([{0, {hash0, [peer2, peer1]}}], 
+		     ets:lookup(piece_table, 0))]
+     }
+    }.
+
+read_piece_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      initiate_table([hash0, hash1, hash2]), 
+	      insert_bitfield(piece_table, peer1, [{1,0}, {1,1}, {0,2}])
+      end,
+      [?_assertEqual(read_piece(piece_table, 1), {1, {hash1, [peer1]}}),
+       ?_assertError(function_clause, read_piece(piece2_table, 1))]
+     }
+    }.
+
+get_piece_hash_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      initiate_table([hash0, hash1, hash2]), 
+	      insert_bitfield(piece_table, peer1, [{1,0}, {1,1}, {0,2}])
+      end,
+      [?_assertEqual(get_piece_hash(piece_table, 1), hash1),
+       ?_assertError(function_clause, get_piece_hash(piece2_table, 1))]
+     }
+    }.
+
+putback_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      initiate_table([hash0, hash1, hash2]), 
+	      insert_bitfield(piece_table, peer1, [{1,0}, {1,1}, {0,2}]),
+	      putback(piece_table, {3, {hash3, [peer3]}}) 		  
+      end,
+      [?_assertMatch([{3, {hash3, [peer3]}}], ets:lookup(piece_table, 3)),
+       ?_assertMatch([{2, {hash2, []}}], ets:lookup(piece_table, 2))]
+     }
+    }.
+		     
+    
+	      
+	      
 
 	      
 	      
