@@ -33,7 +33,7 @@ loop(Peer_mutex_pid, Peer_id) ->
 	    mutex:received(Peer_mutex_pid),
 	    loop(Peer_mutex_pid, Peer_id);
 	{port, Listen_port} ->
-	    mutex:update_pee(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
+	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
 	    mutex:received(Peer_mutex_pid),
 	    loop(Peer_mutex_pid, Peer_id)
     end.
