@@ -38,6 +38,9 @@ loop(piece_table)->
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(piece_table, Index);
+		delete_peer ->
+		    [PeerId] = Args,
+		    Reply = delete_peer(piece_table,PeerId);
 		putback ->
 		    Piece = Args,
 		    Reply = putback(piece_table, Piece)
@@ -76,6 +79,19 @@ read_piece(piece_table, Index) ->
 get_piece_hash(piece_table, Index) ->
     [{Index, {Piecehash, _Peers}}] = ets:lookup(piece_table, Index),
     Piecehash.
+
+delete_peer(piece_table,PeerId)->
+    delete_peer(piece_table,PeerId,0).
+delete_peer(piece_table,PeerId,Index) ->
+    io:format("last: ~w~n",[ets:last(piece_table)]),
+    case Index > ets:last(piece_table) of
+	true ->
+	    has_deleted;
+	false ->
+	    [{Index,{Piecehash,Peers}}] = ets:lookup(piece_table,Index),
+	     ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
+	    delete_peer(piece_table,PeerId,Index+1)
+    end.
 
 %% insert the piece returned from downloading_storage
 putback(piece_table, Piece)->
