@@ -92,7 +92,7 @@ putback(piece_table, Piece)->
 %%                     pieces and their hashes
 %% Prerequisites:      None
 %% Expected result:    The table has been created and pieces correctly inserted
-%% Pass/Fail criteria: When run response is "All 2 tests passed"/When run 
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
 %%                     response is error
 
 initiate_table_test_() ->
@@ -104,7 +104,15 @@ initiate_table_test_() ->
       [?_assertMatch([], ets:lookup(piece_table, 3)),
        ?_assertMatch([{0, {hash0, []}}], ets:lookup(piece_table, 0))]
      }
-    }.  
+    }. 
+
+%% Id:                 2 
+%% Title:              Insert bitfield info
+%% Purpose:            Ensure correct insert of bitfield, peer and piece info
+%% Prerequisites:      Existing piece table with pieces
+%% Expected result:    Info in bitfield has been inserted
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error 
 
 insert_bitfield_test_() ->  
     {spawn,
@@ -119,6 +127,14 @@ insert_bitfield_test_() ->
        ?_assertError(badarg, ets:lookup(piece2_table, 2))]
      }
     }.
+
+%% Id:                 3 
+%% Title:              Update bitfield info
+%% Purpose:            Ensure correct update of bitfield 
+%% Prerequisites:      Existing table with pieces and initial bitfield info
+%% Expected result:    Info in bitfield has been updated
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
 
 update_bitfield_test_() ->
     {spawn,
@@ -135,6 +151,14 @@ update_bitfield_test_() ->
      }
     }.
 
+%% Id:                 4 
+%% Title:              Get piece info
+%% Purpose:            Ensure correct extraction of piece info 
+%% Prerequisites:      Existing table with pieces and bitfield info
+%% Expected result:    All stored values of the requested piece is returned
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
 read_piece_test_() ->
     {spawn,
      {setup,
@@ -147,6 +171,14 @@ read_piece_test_() ->
      }
     }.
 
+%% Id:                 5 
+%% Title:              Get piece hash
+%% Purpose:            Ensure correct extraction of piece hash 
+%% Prerequisites:      Existing table with pieces and their hash
+%% Expected result:    The hash of the requested piece is returned
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
 get_piece_hash_test_() ->
     {spawn,
      {setup,
@@ -158,6 +190,14 @@ get_piece_hash_test_() ->
        ?_assertError(function_clause, get_piece_hash(piece2_table, 1))]
      }
     }.
+
+%% Id:                 6 
+%% Title:              Put back piece
+%% Purpose:            Ensure correct insertion of piece and its info 
+%% Prerequisites:      Existing piece table
+%% Expected result:    The piece is correctly inserted with all its info
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
 
 putback_test_() ->
     {spawn,
