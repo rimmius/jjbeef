@@ -1,4 +1,5 @@
 %%% Created by: Eva-Lisa Kedborn, Jing Liu
+%%%Rarest piece algorithm: Fredrik Gustafsson
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
@@ -11,7 +12,17 @@ start(List) ->
 
 init(List) ->
     initiate_table(List),
-    loop(piece_table).
+    initiate_rarest(length(List)),
+    loop(piece_table, rarest_table, length(List)).
+
+initiate_rarest(Max) ->
+    ets:new(rarest_table, [named_table, ordered_set]),
+    initiate_rarest(rarest_table, 1, Max).
+initiate_rarest(rarest_table, Acc, Max) when Acc =< Max ->
+    ets:insert(rarest_table, {Acc, 0}),
+    initiate_rarest(rarest_table, Acc+1, Max);
+initiate_rarest(rarest_table, _Acc, _Max) ->
+    ok.
 
 initiate_table(List) ->
     ets:new(piece_table,[named_table, ordered_set]),
@@ -22,7 +33,7 @@ initiate_table(piece_table, [H|T], Index) ->
 initiate_table(piece_table, [], _Index) ->
     piece_table.
 
-loop(piece_table)->
+loop(piece_table, rarest_table, Nr_of_pieces)->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
@@ -34,21 +45,63 @@ loop(piece_table)->
 		    Reply = read_piece(piece_table, Index);
 		update_bitfield ->
 		    [PeerId, PieceIndex] = Args,
-		    Reply = update_bitfield(piece_table, PeerId, PieceIndex);
+		    Updated = update_bitfield(piece_table, PeerId, PieceIndex),
+		    Reply = update_rarest(Updated, rarest_table, PieceIndex);
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(piece_table, Index);
 		delete_peer ->
 		    [PeerId] = Args,
 		    Reply = delete_peer(piece_table,PeerId);
+		get_rarest ->
+		    Reply = get_rarest(rarest_table, Nr_of_pieces);
+		delete_piece ->
+		    [Index] = Args,
+		    Reply = delete_piece(rarest_table, Index);
 		putback ->
 		    Piece = Args,
 		    Reply = putback(piece_table, Piece)
 	    end,
 	    From ! {reply, Reply},
-	    loop(piece_table);
+	    loop(piece_table, rarest_table, Nr_of_pieces);
 	stop -> ok
     end.
+
+delete_piece(rarest_table, Index) ->
+    ets:delete(rarest_table, Index).
+
+%%Updates the rarest_table with the new have message
+update_rarest(Updated, rarest_table, Index) ->
+    case Updated of
+	false ->
+	    false;
+	_ ->
+	    [{Index, Number}] = ets:lookup(rarest_table, Index),
+	    ets:insert(rarest_table, {Index, Number+1})
+    end.
+get_rarest(rarest_table, Max) ->
+    get_rarest(rarest_table, 1, Max, undefined, undefined).
+get_rarest(rarest_table, Acc, Max, Rarest, Index) when Acc =< Max ->
+    [{Acc, Number}] = ets:lookup(rarest_table, Acc),
+    case Rarest of
+	undefined ->
+	    case Number of
+		0 ->
+		    get_rarest(rarest_table, Acc+1, Max, undefined, undefined);
+		Any_number  -> 
+		    get_rarest(rarest_table, Acc+1, Max, Any_number, Acc)
+	    end;
+	Rarest_nr_so_far  ->
+	    case Number < Rarest_nr_so_far of
+		true ->
+		    get_rarest(rarest_table, Acc+1, Max, Number, Acc);
+		_  ->
+		    get_rarest(rarest_table, Acc+1, Max, Rarest_nr_so_far, Index)
+	    end
+    end;
+
+get_rarest(rarest_table, _Acc, _Max, _Number, Index) ->
+    Index.
 
 %% insert a new peer that has one of the pieces we want into the table
 insert_bitfield(piece_table, PeerId, [H|T]) ->
