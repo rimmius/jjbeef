@@ -4,13 +4,13 @@
 %%%This module supervises the torrent parser module
 
 -module(download_manager).
--export([start/3,  init/2, is_valid_info_hash/2, 
+-export([start/2,  init/2, is_valid_info_hash/2, 
 	 get_my_id/1, get_my_info_hash/1, get_info_clean/1]).
 
 start(Filepath, GUIPid) ->
-    spawn_link(?MODULE, init, [Filepath, GUIPid, My_id]).
+    spawn_link(?MODULE, init, [Filepath, GUIPid]).
     
-init(Filepath, GUIPid) ->
+init(Filepath, _GUIPid) ->
     process_flag(trap_exit, true),
     {dict, Dict} = get_torrent_data(Filepath),
     Info_raw = dict:fetch(<<"info">>, Dict),
@@ -80,7 +80,7 @@ get_length([{_,H}|T], Total) ->
     {ok, Value} = dict:find(<<"length">>,H),
     get_length(T, Total+Value).
 
-handle_pieces([], Piece_list, Byte, New_list) ->
+handle_pieces([], Piece_list, _Byte, New_list) ->
     lists:reverse([lists:reverse(Piece_list)|New_list]);
 handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
     handle_pieces(T,[H|Piece_list], Byte+1, New_list);
