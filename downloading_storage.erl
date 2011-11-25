@@ -66,5 +66,6 @@ delete_peer(Tid, PieceIndex, PeerId)->
 
 %% return the piece to be put back in the piece_storage
 put_back(Tid, PieceIndex)->
-   [PieceIndex, {PieceHash, AllPeerList,_}] = ets:lookup(Tid, PieceIndex),
-   {PieceIndex, {PieceHash, AllPeerList}}.
+   [PieceIndex, {PieceHash, AllPeerList,BadPeerList}] = 
+	ets:lookup(Tid, PieceIndex),
+   {PieceIndex, {PieceHash, AllPeerList--BadPeerList}}.
