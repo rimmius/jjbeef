@@ -44,9 +44,13 @@ send_to_tracker([H|T], Tracker_pid, Peers_pid, Dl_pid) ->
     end.
 loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
     receive
-	{get_storage, From} ->
-	    From ! {reply, {Peer_storage_pid, File_storage_pid, 
-			    Piece_storage_pid, Dl_storage_pid}},
+	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
+	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
+					 Sock, Port, undefined]),
+	    mutex:received(Peer_storage_pid),
+	    message_handler:start_link(Piece_storage_pid, Sock, Peer_id),
+	    From ! {reply, ok},
+	    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case gen_tcp:connect(Host, Port, [binary, {active, false},
@@ -161,14 +165,10 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
-    Peers_pid ! {get_storage, self()},
+    Peers_pid ! {insert_new_peer, self(), {Host, Peer_id, Sock, Port}},
     receive
-	{reply, {Peer_storage_pid, _File_storage_pid, Piece_storage_pid, _Dl_storage_pid}} ->
-	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
-					 Sock, Port, undefined]),
-	    mutex:received(Peer_storage_pid),
-	    message_handler:start_link(Piece_storage_pid, Sock, Peer_id)
-	    
+	{reply, Reply} ->
+	    Reply
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
