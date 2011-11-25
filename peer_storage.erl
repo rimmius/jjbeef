@@ -116,6 +116,14 @@ setup() ->
 cleanup(Pid) ->
     Pid ! stop.
 
+%% Id:                 9 
+%% Title:              Insert new peer
+%% Purpose:            Ensure correct insertion of a new peer
+%% Prerequisites:      Existing table
+%% Expected result:    The peer and info has been correctly inserted into table
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
 insert_new_peer_test_() ->
     {spawn,
      {setup,
@@ -131,6 +139,14 @@ insert_new_peer_test_() ->
       end
      }
     }.
+
+%% Id:                 10 
+%% Title:              Update peer
+%% Purpose:            Ensure correct update of peer related info
+%% Prerequisites:      Existing table with peers stored in it
+%% Expected result:    The peer info is updated
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
 
 update_peer_test_() ->
     {spawn,
@@ -176,6 +192,14 @@ update_peer_test_() ->
      }
     }.
 
+%% Id:                 11 
+%% Title:              Delete peer
+%% Purpose:            Ensure correct deletion when a peer disconnectes
+%% Prerequisites:      Existing tbale with peer/peers
+%% Expected result:    The peer and all its info has been correctly removed
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
 delete_peer_test_() ->
     {spawn,
      {setup,
@@ -189,6 +213,14 @@ delete_peer_test_() ->
       end
      }
     }.
+
+%% Id:                 12 
+%% Title:              Get specific field info
+%% Purpose:            Retrieve specific field info about a peer 
+%% Prerequisites:      Existing table with peer/peers
+%% Expected result:    The requested field info is returned
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
 
 read_field_test_() ->
     {spawn,
