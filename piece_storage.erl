@@ -12,17 +12,8 @@ start(List) ->
 
 init(List) ->
     initiate_table(List),
-%    initiate_rarest(length(List)),
-    loop(piece_table, length(List)).
+    loop(piece_table, length(List)-1).
 
-%initiate_rarest(Max) ->
-%    ets:new(rarest_table, [named_table, ordered_set]),
-%    initiate_rarest(rarest_table, 1, Max).
-%initiate_rarest(rarest_table, Acc, Max) when Acc =< Max ->
-%    ets:insert(rarest_table, {Acc, 0}),
-%    initiate_rarest(rarest_table, Acc+1, Max);
-%initiate_rarest(rarest_table, _Acc, _Max) ->
-%    ok.
 
 initiate_table(List) ->
     ets:new(piece_table,[named_table, ordered_set]),
@@ -47,18 +38,17 @@ loop(piece_table, Nr_of_pieces)->
 		update_bitfield ->
 		    [PeerId, PieceIndex] = Args,
 		    Reply = update_bitfield(piece_table, PeerId, PieceIndex);
-%		    Reply = update_rarest(Updated, rarest_table, PieceIndex);
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(piece_table, Index);
 		delete_peer ->
 		    [PeerId] = Args,
 		    Reply = delete_peer(piece_table,PeerId);
-%		get_rarest ->
-%		    Reply = get_rarest(rarest_table, Nr_of_pieces);
 		delete_piece ->
 		    [Index] = Args,
 		    Reply = delete_piece(piece_table, Index);
+		get_rarest ->
+		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, undefined, undefined);
 		putback ->
 		    [Piece] = Args,
 		    Reply = putback(piece_table, Piece)
@@ -71,38 +61,25 @@ loop(piece_table, Nr_of_pieces)->
 delete_piece(piece_table, Index) ->
     ets:delete(piece_table, Index).
 
-%%Updates the rarest_table with the new have message
-%update_rarest(Updated, rarest_table, Index) ->
-%    case Updated of
-%	false ->
-%	    false;
-%	_ ->
-%	    [{Index, Number}] = ets:lookup(rarest_table, Index),
-%	    ets:insert(rarest_table, {Index, Number+1})
-%    end.
-%get_rarest(rarest_table, Max) ->
-%    get_rarest(rarest_table, 1, Max, undefined, undefined).
-%get_rarest(rarest_table, Acc, Max, Rarest, Index) when Acc =< Max ->
-%    [{Acc, Number}] = ets:lookup(rarest_table, Acc),
-%    case Rarest of
-%	undefined ->
-%	    case Number of
-%		0 ->
-%		    get_rarest(rarest_table, Acc+1, Max, undefined, undefined);
-%		Any_number  -> 
-%		    get_rarest(rarest_table, Acc+1, Max, Any_number, Acc)
-%	    end;
-%	Rarest_nr_so_far  ->
-%	    case Number < Rarest_nr_so_far of
-%		true ->
-%		    get_rarest(rarest_table, Acc+1, Max, Number, Acc);
-%		_  ->
-%		    get_rarest(rarest_table, Acc+1, Max, Rarest_nr_so_far, Index%)
-%	    end
-%    end;
-%
-%get_rarest(rarest_table, _Acc, _Max, _Number, Index) ->
-%    Index.
+get_rarest(piece_table, Acc, Max, undefined, undefined) when Acc =< Max ->
+    [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
+    case length(Peers) of
+	0 ->
+	    get_rarest(piece_table, Acc+1, Max, undefined, undefined);
+	Rarest  ->
+	    get_rarest(piece_table, Acc+1, Max, Rarest, Index)
+    end;
+get_rarest(piece_table, Acc, Max, Rarest_so_far, Rarest_index) when Acc =< Max ->
+    [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
+    case length(Peers) < Rarest_so_far of
+	true ->
+	    get_rarest(piece_table, Acc+1, Max, length(Peers), Index);
+	_  ->
+	    get_rarest(piece_table, Acc+1, Max, Rarest_so_far, Rarest_index)
+end;
+get_rarest(piece_table, _Acc, _Max, _Rarest, Index) ->
+    {value, {Index, _Hash, Peers}} = ets:lookup(piece_table, Index),
+    Peers.
 
 %% insert a new peer that has one of the pieces we want into the table
 insert_bitfield(piece_table, PeerId, [H|T]) ->
