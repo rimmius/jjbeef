@@ -83,6 +83,12 @@ place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /=
     end;
 place_rarest(_Index, _Peers, [H|T], _New_list) ->
     [H|T].
+
+get_rarest_index(piece_table,PeerId)->
+    RarestList = get_rarest(piece_table,%%%%%%%%%%%%%%%%%%%%%%  not done yet
+
+
+
 %% insert a new peer that has one of the pieces we want into the table
 insert_bitfield(piece_table, PeerId, [H|T]) ->
     Has = [X || {1, X} <- [H|T]],
@@ -90,16 +96,26 @@ insert_bitfield(piece_table, PeerId, [H|T]) ->
 
 %% inner function of insert_bitfield
 insert_to_table(piece_table, [Has|T], PeerId) ->
-    [{Index, {Hash, Peers}}] = ets:lookup(piece_table, Has),
-     ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
-     insert_to_table(piece_table, T, PeerId);
+    Result =  ets:lookup(piece_table,Has);
+    case Result of
+	[]->
+	    non_existent;
+	_found->
+	    [{Index, {Hash, Peers}}] = Result,
+	    ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
+	    insert_to_table(piece_table, T, PeerId);
 insert_to_table(piece_table, [], _PeerId) ->
      has_inserted.
 
 %% update piece storage when a have message is received
 update_bitfield(piece_table, PeerId, PieceIndex) ->
-    [{PieceIndex, {Hash, Peers}}] = ets:lookup(piece_table, PieceIndex),
-    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}).
+    Result =  ets:lookup(piece_table, PieceIndex),
+    case Result of
+	[]->
+	    non_existent;
+	_found->
+	    [{PieceIndex, {Hash, Peers}}] = ets:lookup(piece_table, PieceIndex),
+	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}).
     
 %% read the list of peers that has a certain piece by 
 %% providing the piece index. 
@@ -124,6 +140,9 @@ delete_peer(piece_table,PeerId,Index) ->
 	     ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
 	    delete_peer(piece_table,PeerId,Index+1)
     end.
+
+delete_piece(piece_table,Index)->
+    ets:delete(piece_table,Index).
 
 %% insert the piece returned from downloading_storage
 putback(piece_table, Piece)->
