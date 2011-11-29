@@ -3,7 +3,7 @@
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
--export([start/1, init/1, initiate_table/1]).
+-export([start/1, init/1, initiate_table/1, place_rarest/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -48,7 +48,7 @@ loop(piece_table, Nr_of_pieces)->
 		    [Index] = Args,
 		    Reply = delete_piece(piece_table, Index);
 		get_rarest ->
-		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, undefined, undefined);
+		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
 		putback ->
 		    [Piece] = Args,
 		    Reply = putback(piece_table, Piece)
@@ -61,26 +61,28 @@ loop(piece_table, Nr_of_pieces)->
 delete_piece(piece_table, Index) ->
     ets:delete(piece_table, Index).
 
-get_rarest(piece_table, Acc, Max, undefined, undefined) when Acc =< Max ->
+get_rarest(piece_table, Acc, Max, Rarest_list) when Acc =< Max ->
     [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
     case length(Peers) of
 	0 ->
-	    get_rarest(piece_table, Acc+1, Max, undefined, undefined);
-	Rarest  ->
-	    get_rarest(piece_table, Acc+1, Max, Rarest, Index)
+	    get_rarest(piece_table, Acc+1, Max, Rarest_list);
+	_Nr  ->
+	    get_rarest(piece_table, Acc+1, Max, place_rarest(Index, Peers, Rarest_list, []))
     end;
-get_rarest(piece_table, Acc, Max, Rarest_so_far, Rarest_index) when Acc =< Max ->
-    [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
-    case length(Peers) < Rarest_so_far of
-	true ->
-	    get_rarest(piece_table, Acc+1, Max, length(Peers), Index);
-	_  ->
-	    get_rarest(piece_table, Acc+1, Max, Rarest_so_far, Rarest_index)
-end;
-get_rarest(piece_table, _Acc, _Max, _Rarest, Index) ->
-    {value, {Index, _Hash, Peers}} = ets:lookup(piece_table, Index),
-    Peers.
+get_rarest(piece_table, _Acc, _Max, Rarest_list) ->
+    Rarest_list.
 
+place_rarest(Index, Peers, [], New_list) ->
+    New_list ++ [{Index, Peers}];
+place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /= 0 ->
+    case length(Peers) < length(Peers2) of
+	true ->
+	    New_list ++ [{Index,Peers}] ++ [{Index2, Peers2}|T];
+	_  ->
+	    place_rarest(Index, Peers, T, New_list ++ [{Index2, Peers2}])
+    end;
+place_rarest(_Index, _Peers, [H|T], _New_list) ->
+    [H|T].
 %% insert a new peer that has one of the pieces we want into the table
 insert_bitfield(piece_table, PeerId, [H|T]) ->
     Has = [X || {1, X} <- [H|T]],
