@@ -3,16 +3,16 @@
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
--export([start/1, init/1, initiate_table/1, place_rarest/4]).
+-export([start/2, init/2, initiate_table/1, place_rarest/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 
-start(List) ->
-    spawn(?MODULE, init, [List]).
+start(List, File_storage_pid) ->
+    spawn(?MODULE, init, [List, File_storage_pid]).
 
-init(List) ->
+init(List, File_storage_pid) ->
     initiate_table(List),
-    loop(piece_table, length(List)-1).
+    loop(piece_table, length(List)-1, File_storage_pid).
 
 
 initiate_table(List) ->
@@ -24,20 +24,20 @@ initiate_table(piece_table, [H|T], Index) ->
 initiate_table(piece_table, [], _Index) ->
     piece_table.
 
-loop(piece_table, Nr_of_pieces)->
+loop(piece_table, Nr_of_pieces, File_storage_pid)->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
 		insert_bitfield ->
 		    io:format("This is Args ~w~n", [Args]),
 		    [PeerId, [H|T]] = Args,
-		    Reply = insert_bitfield(piece_table, PeerId, [H|T]);
+		    Reply = insert_bitfield(piece_table, PeerId, [H|T], File_storage_pid);
 		read_piece ->
 		    [Index] = Args,
 		    Reply = read_piece(piece_table, Index);
 		update_bitfield ->
 		    [PeerId, PieceIndex] = Args,
-		    Reply = update_bitfield(piece_table, PeerId, PieceIndex);
+		    Reply = update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid);
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(piece_table, Index);
@@ -54,7 +54,7 @@ loop(piece_table, Nr_of_pieces)->
 		    Reply = putback(piece_table, Piece)
 	    end,
 	    From ! {reply, Reply},
-	    loop(piece_table, Nr_of_pieces);
+	    loop(piece_table, Nr_of_pieces, File_storage_pid);
 	stop -> ok
     end.
 
@@ -83,39 +83,25 @@ place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /=
     end;
 place_rarest(_Index, _Peers, [H|T], _New_list) ->
     [H|T].
-
-get_rarest_index(piece_table,PeerId)->
-    RarestList = get_rarest(piece_table,%%%%%%%%%%%%%%%%%%%%%%  not done yet
-
-
-
 %% insert a new peer that has one of the pieces we want into the table
-insert_bitfield(piece_table, PeerId, [H|T]) ->
+insert_bitfield(piece_table, PeerId, [H|T], File_storage_pid) ->
     Has = [X || {1, X} <- [H|T]],
-    insert_to_table(piece_table, Has, PeerId).
-
+    insert_to_table(piece_table, Has, PeerId),
+    file_storage:compare_bitfield(File_storage_pid, [H|T]).
+    
 %% inner function of insert_bitfield
 insert_to_table(piece_table, [Has|T], PeerId) ->
-    Result =  ets:lookup(piece_table,Has);
-    case Result of
-	[]->
-	    non_existent;
-	_found->
-	    [{Index, {Hash, Peers}}] = Result,
-	    ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
-	    insert_to_table(piece_table, T, PeerId);
+    [{Index, {Hash, Peers}}] = ets:lookup(piece_table, Has),
+     ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
+     insert_to_table(piece_table, T, PeerId);
 insert_to_table(piece_table, [], _PeerId) ->
      has_inserted.
 
 %% update piece storage when a have message is received
-update_bitfield(piece_table, PeerId, PieceIndex) ->
-    Result =  ets:lookup(piece_table, PieceIndex),
-    case Result of
-	[]->
-	    non_existent;
-	_found->
-	    [{PieceIndex, {Hash, Peers}}] = ets:lookup(piece_table, PieceIndex),
-	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}).
+update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid) ->
+    [{PieceIndex, {Hash, Peers}}] = ets:lookup(piece_table, PieceIndex),
+    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
+    file_storage:have(File_storage_pid, PieceIndex).
     
 %% read the list of peers that has a certain piece by 
 %% providing the piece index. 
@@ -140,9 +126,6 @@ delete_peer(piece_table,PeerId,Index) ->
 	     ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
 	    delete_peer(piece_table,PeerId,Index+1)
     end.
-
-delete_piece(piece_table,Index)->
-    ets:delete(piece_table,Index).
 
 %% insert the piece returned from downloading_storage
 putback(piece_table, Piece)->

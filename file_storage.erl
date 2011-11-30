@@ -1,7 +1,7 @@
 %%%Created by: Fredrik Gustafsson
 %%%Date: 16-11-2011
 -module(file_storage).
--export([start/4, init/4, get_bitfield/1, insert_chunk/4, compare_bitfield/2, have/2]).
+-export([start/4, init/4, get_bitfield/1, insert_chunk/4, compare_bitfield/2, have/2, what_chunk/2]).
 
 start(Dl_storage_pid, Files, Length, Piece_length) ->
     spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length]).
@@ -21,45 +21,50 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 	{bitfield, From} ->
 	    From ! {reply, Bitfield},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
-	{insert_chunk, From, Index, Begin, Block} ->
+	{insert_chunk, From, Index, Begin, Block, Length_of_block} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
-		    New_chunk_table = ets:new(piece, [ordered_set]),
-		    ets:insert(New_chunk_table, {Begin, Block}),
-		    ets:insert(Table_id, {Index, New_chunk_table});
+		    Chunk_table_id = ets:new(piece, [ordered_set]),
+		    ets:insert(Chunk_table_id, {Begin, Block, Length_of_block}),
+		    ets:insert(Table_id, {Index, Chunk_table_id});
 		[{Index, Chunk_table_id}] ->
-		    ets:insert(Chunk_table_id, {Begin, Block})
+		    ets:insert(Chunk_table_id, {Begin, Block, Length_of_block})
 	    end,
-	    From ! {reply, {Table_id, Piece_length}},
+	    From ! {reply, {Index, Chunk_table_id, Piece_length, Dl_storage_pid}},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
 	{write_to_file, From} ->
 	    {ok , Io} = file:open(H, [write]),
 	    ok =  write_to_file(Table_id, 1, Length, Io, Piece_length),
 	    ok = file:close(Io),
-	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length),
+	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length, Dl_storage_pid),
 	    From ! {reply, ok},
-	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length)
+	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
+	{chunk_table, From, Index} ->
+	    [{Index, Chunk_table_id, Length_of_block}] = ets:lookup(Table_id, Index),
+	    From ! {reply, Chunk_table_id, Piece_length},
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length)
     end.
 
-generate_bitfield(Acc, Length, Table_id, Piece_length) when Acc =< Length ->
+generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid) when Acc =< Length ->
     case ets:lookup(Table_id, Acc) of
 	[] ->
-	    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length)];
+	    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid)];
 	[{_, Chunk_table_id}]  ->
-	    [{check_piece(0, Acc, Chunk_table_id, Piece_length), Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length)]
+	    [{check_piece(0, Acc, Chunk_table_id, Piece_length, Dl_storage_pid), Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid)]
     end;
 
-generate_bitfield(_Acc, _Length, _Table_id, _Piece_length) ->
+generate_bitfield(_Acc, _Length, _Table_id, _Piece_length, _Dl_storage_pid) ->
     [].
 
-check_piece(Acc, Index, Chunk_table_id, Piece_length) when Acc =< Piece_length ->
+check_piece(Acc, Index, Chunk_table_id, Piece_length, Dl_storage_pid) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    0;
-	_ ->
-	    check_piece(Acc+16384, Index, Chunk_table_id, Piece_length)
+	{_Begin, _Block, Length_of_block} ->
+	    check_piece(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Dl_storage_pid)
     end;
-check_piece(_Acc, _Index, _Chunk_table_id, _Piece_length) ->
+check_piece(_Acc, Index, _Chunk_table_id, _Piece_length, Dl_storage_pid) ->
+    mutex:request(Dl_storage_pid, delete_piece, [Index]),
     1.
 
 get_bitfield(File_storage_pid) ->
@@ -75,8 +80,8 @@ strip_bitfield(Bitfield, Acc, Max) when Acc =< Max ->
 strip_bitfield(_Bitfield, _Acc, _Max) ->
     [].
 
-insert_chunk(File_storage_pid, Index, Begin, Block) ->
-    File_storage_pid ! {insert_chunk, self(), Index, Begin, Block},
+insert_chunk(File_storage_pid, Index, Begin, Block, Block_length) ->
+    File_storage_pid ! {insert_chunk, self(), Index, Begin, Block, Block_length},
     receive
 	{reply, Reply} ->
 	    Reply
@@ -85,7 +90,9 @@ insert_chunk(File_storage_pid, Index, Begin, Block) ->
     receive
 	{reply, Reply2} ->
 	    Reply2
-    end.
+    end,
+    {Index, Chunk_table_id, Piece_length, Dl_storage_pid} = Reply,
+    check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid).
 
 write_to_file(Table_id, Acc, Length, Io, Piece_length) when Acc =< Length ->
     case ets:lookup(Table_id, Acc) of
@@ -145,3 +152,20 @@ have(File_storage_pid, Index) ->
 		    false
 	    end
     end.  
+
+what_chunk(File_storage_pid, Index) ->
+    File_storage_pid ! {chunk_table, self(), Index},
+    receive
+	{reply, Chunk_table_id, Piece_length} ->
+	    what_chunk(0, Index, Chunk_table_id, Piece_length)
+    end.
+
+what_chunk(Acc, Index, Chunk_table_id, Piece_length) when Acc < Piece_length ->
+    case ets:lookup(Chunk_table_id, Acc) of
+	[] ->
+	    Acc;
+	_ ->
+	    what_chunk(Acc+16384, Index, Chunk_table_id, Piece_length)
+    end;
+what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length) ->
+    access_denied.
