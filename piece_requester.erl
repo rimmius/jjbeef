@@ -86,7 +86,9 @@ send_event(Pid, bitfield, Bitfield_in_list) ->
 init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Socket, Peer_id]) ->
     Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     io:format("msg_handler started~n"),
-    message_handler:send(Msg_handler_pid, bitfield, file_storage:get_bitfield(File_storage_pid)),
+	My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
+	mutex:received(File_storage_pid),
+    message_handler:send(Msg_handler_pid, bitfield, My_bitfield_in_list),
     io:format("my bitfiled sent~n"),
     io:format("init complete~n"),
     {ok, am_choked_uninterested, #state{piece_storage = Piece_mutex_pid,
@@ -118,18 +120,17 @@ am_choked_uninterested(am_unchoked, State) ->
 am_choked_interested(am_unchoked, State) ->
     %% TODO,
     io:format("~n~n~n~w~nPIECE_STORAGE_PID~n", [State#state.piece_storage]),
-    case mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]) of
+	Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),
+	mutex:received(State#state.piece_storage),
+    case Reply of
 	{ok, Index} -> 
 	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
-	    Any = file_storage:what_chunk(State#state.file_storage, Index),
-	    io:format("msg handler is going to send request~n~w~n", [Any]),
-	    {Begin, Length} = Any,
+	    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
+		mutex:received(State#state.file_storage),
+	    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
-	    io:format("request sent, going reloop~n"),
-	    mutex:received(State#state.piece_storage),
 	    {next_state, am_unchoked_interested, State};
 	{hold} -> 
-	    mutex:received(State#state.piece_storage),
 	    {next_state, am_choked_uninterested, State}
     end.
 
@@ -139,18 +140,22 @@ am_choked_interested(am_unchoked, State) ->
 am_unchoked_interested(am_choked, State) ->
     {next_state, am_choked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
-    case mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id) of
+	Reply = mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id),
+	mutex:received(State#state.piece_storage),
+    case Reply of
 	{ok, Index} -> 
-	    {Begin, Length} = file_storage:what_chunk(State#state.file_storage, Index),
+	    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
+		mutex:received(State#state.file_storage),
+		io:format("Rdy to request a New chunk of a new piece: index=~w, begin=~w, length=~w~n", [Index, Begin, Length]), 
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
-	    mutex:received(State#state.piece_storage),
 	    {next_state, am_unchoked_interested, State};
-	hold -> 
-	    mutex:received(State#state.piece_storage),
+	{hold} -> 
 	    {next_state, am_choked_uninterested, State}
     end;
 am_unchoked_interested({piece_incomplete, Index}, State) ->
-    {Begin, Length} = file_storage:what_chunk(State#state.file_storage, Index),
+    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
+	mutex:received(State#state.file_storage),
+	io:format("Rdy to request a new piece of index=~w: begin=~w, length=~w~n", [Index, Begin, Length]), 
     message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]), %% length
     {next_state, am_unchoked_interested, State}.
 %% and keep_alive
