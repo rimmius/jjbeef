@@ -1,7 +1,7 @@
 %%%Created by: Fredrik Gustafsson
 %%%Date: 16-11-2011
 -module(file_storage).
--export([start/4, init/4, get_bitfield/1, insert_chunk/4, compare_bitfield/2, have/2, what_chunk/2]).
+-export([start/4, init/4, get_bitfield/1, insert_chunk/5, compare_bitfield/2, have/2, what_chunk/2]).
 
 start(Dl_storage_pid, Files, Length, Piece_length) ->
     spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length]).
@@ -40,8 +40,8 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 	    From ! {reply, ok},
 	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
 	{chunk_table, From, Index} ->
-	    [{Index, Chunk_table_id, Length_of_block}] = ets:lookup(Table_id, Index),
-	    From ! {reply, Chunk_table_id, Piece_length},
+	    [{Index, Chunk_table, _Length_of_block}] = ets:lookup(Table_id, Index),
+	    From ! {reply, Chunk_table, Piece_length},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length)
     end.
 
