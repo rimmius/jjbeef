@@ -105,13 +105,13 @@ write_to_file(Table_id, Acc, Length, Io, Piece_length) when Acc =< Length ->
 write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
     ok.
 
-write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc =< Piece_length ->
+write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
-	[{Acc, Chunk}] ->
+	[{Acc, Chunk, Block_length}] ->
 	    file:write(Io, Chunk),
-	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io)
+	    write_out_chunks(Chunk_table_id, Acc+Block_length, Piece_length, Io)
     end;
 write_out_chunks(_Chunk_table_id, _Acc, _Piece_length, _Io) ->
     ok.
@@ -163,9 +163,14 @@ what_chunk(File_storage_pid, Index) ->
 what_chunk(Acc, Index, Chunk_table_id, Piece_length) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
-	    Acc;
-	_ ->
-	    what_chunk(Acc+16384, Index, Chunk_table_id, Piece_length)
+	    case (Piece_length - Acc) < Piece_length of
+		true ->
+		    {Acc, (Piece_length - Acc)};
+		_ ->
+		    {Acc, 16384}
+	    end;
+	{_Begin, _Block, Block_length} ->
+	    what_chunk(Acc+Block_length, Index, Chunk_table_id, Piece_length)
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length) ->
     access_denied.
