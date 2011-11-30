@@ -3,16 +3,16 @@
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
--export([start/2, init/2, initiate_table/1, place_rarest/4]).
+-export([start/3, init/3, initiate_table/1, place_rarest/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 
-start(List, File_storage_pid) ->
-    spawn(?MODULE, init, [List, File_storage_pid]).
+start(List, File_mutex_pid, Dl_mutex_pid) ->
+    spawn(?MODULE, init, [List, File_mutex_pid, Dl_mutex_pid]).
 
-init(List, File_storage_pid) ->
+init(List, File_mutex_pid, Dl_mutex_pid) ->
     initiate_table(List),
-    loop(piece_table, length(List)-1, File_storage_pid).
+    loop(piece_table, length(List)-1, File_mutex_pid, Dl_mutex_pid).
 
 
 initiate_table(List) ->
@@ -24,20 +24,20 @@ initiate_table(piece_table, [H|T], Index) ->
 initiate_table(piece_table, [], _Index) ->
     piece_table.
 
-loop(piece_table, Nr_of_pieces, File_storage_pid)->
+loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
 		insert_bitfield ->
 		    io:format("This is Args ~w~n", [Args]),
 		    [PeerId, [H|T]] = Args,
-		    Reply = insert_bitfield(piece_table, PeerId, [H|T], File_storage_pid);
+		    Reply = insert_bitfield(piece_table, PeerId, [H|T], File_mutex_pid);
 		read_piece ->
 		    [Index] = Args,
 		    Reply = read_piece(piece_table, Index);
 		update_bitfield ->
 		    [PeerId, PieceIndex] = Args,
-		    Reply = update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid);
+		    Reply = update_bitfield(piece_table, PeerId, PieceIndex, File_mutex_pid);
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(piece_table, Index);
@@ -57,7 +57,7 @@ loop(piece_table, Nr_of_pieces, File_storage_pid)->
 		    Reply = putback(piece_table, Piece)
 	    end,
 	    From ! {reply, Reply},
-	    loop(piece_table, Nr_of_pieces, File_storage_pid);
+	    loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid);
 	stop -> ok
     end.
 
@@ -113,10 +113,10 @@ place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /=
 place_rarest(_Index, _Peers, [H|T], _New_list) ->
     [H|T].
 %% insert a new peer that has one of the pieces we want into the table
-insert_bitfield(piece_table, PeerId, [H|T], File_storage_pid) ->
+insert_bitfield(piece_table, PeerId, [H|T], File_mutex_pid) ->
     Has = [X || {1, X} <- [H|T]],
     insert_to_table(piece_table, Has, PeerId),
-    file_storage:compare_bitfield(File_storage_pid, [H|T]).
+    mutex:request(compare_bitfield, [File_mutex_pid, [H|T]]).
     
 %% inner function of insert_bitfield
 insert_to_table(piece_table, [Has|T], PeerId) ->
@@ -133,7 +133,7 @@ insert_to_table(piece_table, [], _PeerId) ->
      has_inserted.
 
 %% update piece storage when a have message is received
-update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid) ->
+update_bitfield(piece_table, PeerId, PieceIndex, File_mutex_pid) ->
     Result = ets:lookup(piece_table,PieceIndex),
     case Result of
 	[]->
@@ -141,7 +141,7 @@ update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid) ->
 	_found ->
 	    [{PieceIndex, {Hash, Peers}}] = Result,
 	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
-	    file_storage:have(File_storage_pid, PieceIndex)
+	    mutex:request(have, [File_mutex_pid, PieceIndex])
     end.
     
 %% read the list of peers that has a certain piece by 

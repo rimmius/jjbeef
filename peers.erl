@@ -17,10 +17,10 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
 
-    File_storage_pid = file_storage:start(Dl_storage_pid, File_names, length(List_of_pieces), Piece_length),
+    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, length(List_of_pieces), Piece_length]),
     link(File_storage_pid),
 
-    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces, File_storage_pid]),
+    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces, File_storage_pid, Dl_storage_pid]),
     link(Piece_storage_pid),
 
     Peers_pid = self(),
@@ -49,7 +49,7 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
 	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 					 Sock, Port, undefined]),
 	    mutex:received(Peer_storage_pid),
-	    piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid,Dl_storage_pid, Sock, Peer_id),
+	    piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Sock, Peer_id),
 	    From ! {reply, ok},
 	    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
