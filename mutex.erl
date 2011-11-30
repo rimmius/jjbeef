@@ -44,7 +44,7 @@ free(StoragePid) ->
 busy(ClientPid, StoragePid) ->
     receive
 	{received, ClientPid} ->
-	    io:format("~n~n~nGOING FROM BUSY TO FREE~n~n~n"),
+	    %%io:format("~n~n~nGOING FROM BUSY TO FREE~n~n~n"),
 	    free(StoragePid)
     end.
 

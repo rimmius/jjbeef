@@ -7,17 +7,19 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_receiver).
--export([start/4, start_receiving/1]).
--export([init/4, loop/3]).
+-export([start/7, start_receiving/1]).
+-export([init/7, loop/3]).
 
-start(Parent, Peer_mutex_pid, 
+start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
       Socket, Peer_id) ->
-    spawn(?MODULE, init, [Parent, Peer_mutex_pid, 
+    spawn(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 			  Socket, Peer_id]).
 
-init(Parent, Peer_mutex_pid, 
+init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
      Socket, Peer_id) ->
-    Msg_reader_pid = message_reader:start(Peer_mutex_pid, Peer_id),
+    Msg_reader_pid = message_reader:start(Grandparent, 
+					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+					  Peer_id),
     loop(Parent, Socket, Msg_reader_pid).
 
 start_receiving(Pid) ->
@@ -43,22 +45,22 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		{ok, <<0>>} ->
 		    %%choke
 		    io:format("~n*****~w*****Choke len=1, id=0~n", [self()]),
-		    Msg_reader_pid ! {choke, 1},
+		    Msg_reader_pid ! {am_choked, 1},
 		    message_handler:done(Parent);
 		{ok, <<1>>} ->
 		    %% unchoke
 		    io:format("~n*****~w*****Unchoke len=1, id=1 ~n", [self()]),
-		    Msg_reader_pid ! {choke, 0},
+		    Msg_reader_pid ! {am_choked, 0},
 		    message_handler:done(Parent);
 		{ok, <<2>>} ->
 		    %% interested
 		    io:format("~n*****Interested len=1, id=2~n"),
-		    Msg_reader_pid ! {interested, 1},
+		    Msg_reader_pid ! {is_interested, 1},
 		    message_handler:done(Parent);
 		{ok, <<3>>} ->
 		    %% uninterested
 		    io:format("~n*****Uninterested len=1, id=3~n"),
-		    Msg_reader_pid ! {interested, 0},
+		    Msg_reader_pid ! {is_interested, 0},
 		    message_handler:done(Parent)
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
@@ -78,11 +80,13 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%request
 		    io:format("~n*****~w*****Request len=13, id=6, index=~w, begin=~w, length=~w~n", 
 			      [self(), Index, Begin, Length]),
+		    %% NOTIN IS DONE ATM
 		    message_handler:done(Parent);
 		{ok, <<8, Index:32, Begin:32, Length:32>>} ->
 		    %%cancel
 		    io:format("~n*****~w*****Cancel len=13, id=8, index=~w, begin=~w, length=~w~n", 
 			      [self(), Index, Begin, Length]),
+		    %% NOTING IS DONE ATM
 		    message_handler:done(Parent)
 	    end;
 				  %% do_recv(Socket, Pid_message_reader);
@@ -110,6 +114,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%piece
 		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w, block=~w~n", 
 			      [self(), Len-9, Index, Begin, Block]),
+		    Msg_reader_pid ! {piece, Index, Begin, Block, Block_len},
 		    message_handler:done(Parent)
 	    end;
 	    %%do_recv(Socket, Pid_message_reader);

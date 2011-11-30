@@ -25,14 +25,14 @@ do_send(Socket, Type, Msg) ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,1,0>>);
 	{unchoke, _} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,1,1>>);
-	{interested, _} ->
+	{am_interested, true} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,1,2>>);
-	{uninterested, _} ->
+	{am_interested, false} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,1,3>>);
-	{have, [Piece_index]} ->
+	{have, Piece_index} ->
 	    ok = gen_tcp:send(Socket, 
 			      <<0,0,0,5,4, Piece_index:32/integer-big>>);
-	{bitfield, [Bitfield_in_list]} ->
+	{bitfield, Bitfield_in_list} ->
 	    ok = gen_tcp:send(Socket, handle_bitfield(Bitfield_in_list));
 	{request, [Index, Begin, Length]} ->
 	    ok = gen_tcp:send(Socket, 
@@ -48,7 +48,7 @@ do_send(Socket, Type, Msg) ->
 				Index:32/integer-big,
 				Begin:32/integer-big,
 				Length:32/integer-big>>);
-	{port, [Listen_port]} ->
+	{port, Listen_port} ->
 	    ok = gen_tcp:send(Socket,
 			      <<0,0,0,3,9,Listen_port:16>>)
     end.
