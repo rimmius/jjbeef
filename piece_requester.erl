@@ -117,11 +117,13 @@ am_choked_uninterested(am_unchoked, State) ->
 %% state 2
 am_choked_interested(am_unchoked, State) ->
     %% TODO,
+    io:format("~n~n~n~w~nPIECE_STORAGE_PID~n", [State#state.piece_storage]),
     case mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]) of
 	{ok, Index} -> 
 	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
-	    {Begin, Length} = file_storage:what_chunk(State#state.file_storage, Index),
-	    io:format("msg handler is going to send request~n"),
+	    Any = file_storage:what_chunk(State#state.file_storage, Index),
+	    io:format("msg handler is going to send request~n~w~n", [Any]),
+	    {Begin, Length} = Any,
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    io:format("request sent, going reloop~n"),
 	    {next_state, am_unchoked_interested, State};

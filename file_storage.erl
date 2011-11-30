@@ -40,8 +40,14 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 	    From ! {reply, ok},
 	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
 	{chunk_table, From, Index} ->
-	    [{Index, Chunk_table, _Length_of_block}] = ets:lookup(Table_id, Index),
-	    From ! {reply, Chunk_table, Piece_length},
+	    case ets:lookup(Table_id, Index) of
+		[] ->
+		    Chunk_table_id = ets:new(piece, [ordered_set]),
+		    ets:insert(Table_id, {Index, Chunk_table_id}),
+		    From ! {reply, Chunk_table_id, Piece_length};
+	    [{Index, Chunk_table, _Length_of_block}] ->
+		    From ! {reply, Chunk_table, Piece_length}
+	    end,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length)
     end.
 
@@ -155,20 +161,18 @@ have(File_storage_pid, Index) ->
 
 what_chunk(File_storage_pid, Index) ->
     File_storage_pid ! {chunk_table, self(), Index},
+    io:format("~n~nTRYING TO GET CHUNK~n~w~nIndex=~w~n~n", [File_storage_pid, Index]),
     receive
 	{reply, Chunk_table_id, Piece_length} ->
-	    what_chunk(0, Index, Chunk_table_id, Piece_length)
+	    io:format("~n~n~nHEEEEEEEEEEEERE~n~n"),
+	    {Begin, Block_length} = what_chunk(0, Index, Chunk_table_id, Piece_length),
+	    {Begin, Block_length}
     end.
 
 what_chunk(Acc, Index, Chunk_table_id, Piece_length) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
-	    case (Piece_length - Acc) < Piece_length of
-		true ->
-		    {Acc, (Piece_length - Acc)};
-		_ ->
-		    {Acc, 16384}
-	    end;
+	    {Acc, 16384};
 	{_Begin, _Block, Block_length} ->
 	    what_chunk(Acc+Block_length, Index, Chunk_table_id, Piece_length)
     end;

@@ -51,23 +51,26 @@ loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
 		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
 		get_rarest_index ->
 		    [PeerId] = Args,
-		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
-		    case Reply of 
-			{ok,Index}->
-			    Piece = read_piece(piece_table,Index),
-			    mutex:request(Dl_mutex_pid,insert_to_table,[Piece]),
-			    delete_piece(piece_table,Index),
-			    Reply;
-			{hold}->
-			    Reply
-		    end;
+		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces);
+		    %% case Reply of 
+		    %% 	{ok,Index}->
+		    %% 	    {Index,{Hash,Peers}} = read_piece(piece_table,Index),
+		    %% 	    mutex:request(Dl_mutex_pid,write,[Index,Hash,Peers,PeerId]),
+		    %% 	    mutex:received(Dl_mutex_pid),
+		    %% 	    io:format("~n~n~nWROTE TO DOWNLOADING STORAGE~n~n"),
+		    %% 	    delete_piece(piece_table,Index);
+		    %% 	{hold}->
+		    %% 	    io:format("~n~n~nSENDING HOLD~n~n")
+		    %% end;
 		putback ->
 		    [Piece] = Args,
 		    Reply = putback(piece_table, Piece)
 	    end,
 	    From ! {reply, Reply},
 	    loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid);
-	stop -> ok
+	stop -> ok;
+	Anything  ->
+	    io:format("~n~n~n~w~n~n", [Anything])
     end.
 
 delete_piece(piece_table, Index) ->

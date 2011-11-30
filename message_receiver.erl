@@ -112,8 +112,8 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_handler:done(Parent);
 		{ok, <<7, Index:32, Begin:32, Block:Block_len>>} ->
 		    %%piece
-		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w, block=~w~n", 
-			      [self(), Len-9, Index, Begin, Block]),
+		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w~n", 
+			      [self(), Len-9, Index, Begin]),
 		    Msg_reader_pid ! {piece, Index, Begin, Block, Block_len},
 		    message_handler:done(Parent)
 	    end;
