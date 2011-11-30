@@ -52,10 +52,15 @@ loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
-		    {ok,Index} = Reply,
-		    Piece = read_piece(piece_table,Index),
-		    mutex:request(Dl_mutex_pid,insert_to_table,[Piece]),
-		    delete_piece(piece_table,Index);
+		    case Reply of 
+			{ok,Index}->
+			    Piece = read_piece(piece_table,Index),
+			    mutex:request(Dl_mutex_pid,insert_to_table,[Piece]),
+			    delete_piece(piece_table,Index),
+			    Reply;
+			{hold}->
+			    Reply
+		    end;
 		putback ->
 		    [Piece] = Args,
 		    Reply = putback(piece_table, Piece)
