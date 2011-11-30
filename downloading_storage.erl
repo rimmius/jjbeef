@@ -21,10 +21,10 @@ loop(Tid, Piece_storage_pid) ->
 	{request, Function, Args, From} ->
 	    case Function of
 		write ->
-		    [PieceIndex, PieceHash, AllPeerList, DownloadingPeerList]
+		    [PieceIndex, PieceHash, AllPeerList, PeerId]
 			= Args,
 		    From ! {reply, write(Tid, PieceIndex, PieceHash, 
-					 AllPeerList, DownloadingPeerList)};
+					 AllPeerList, PeerId)};
 		delete_piece ->
 		    [PieceIndex, From] = Args,
 		    From ! {reply, delete_piece(Tid, PieceIndex)};
@@ -43,9 +43,9 @@ loop(Tid, Piece_storage_pid) ->
     end.
 
 %% insert new piece that has chosen to be downloaded
-write(Tid, PieceIndex, PieceHash, AllPeerList, DownloadingPeerList) ->
+write(Tid, PieceIndex, PieceHash, AllPeerList, PeerId) ->
     ets:insert(Tid, {PieceIndex, {PieceHash, AllPeerList, 
-				  DownloadingPeerList}}).
+				  PeerId}}).
 
 %% delete a piece that has been downloaded
 delete_piece(Tid, PieceIndex)->
@@ -66,6 +66,6 @@ delete_peer(Tid, PieceIndex, PeerId)->
 
 %% return the piece to be put back in the piece_storage
 put_back(Tid, PieceIndex)->
-   [PieceIndex, {PieceHash, AllPeerList,BadPeerList}] = 
+   [PieceIndex, {PieceHash, AllPeerList,BadPeerId}] = 
 	ets:lookup(Tid, PieceIndex),
-   {PieceIndex, {PieceHash, AllPeerList--BadPeerList}}.
+   {PieceIndex, {PieceHash, AllPeerList--[BadPeerId]}}.
