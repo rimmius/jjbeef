@@ -99,7 +99,7 @@ write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
 write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
-	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
+	    ok;
 	[{Acc, Chunk, Block_length}] ->
 	    file:write(Io, <<Chunk:Block_length>>),
 	    write_out_chunks(Chunk_table_id, Acc+Block_length, Piece_length, Io)
