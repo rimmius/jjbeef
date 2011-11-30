@@ -125,7 +125,7 @@ place_rarest(_Index, _Peers, [H|T], _New_list) ->
 insert_bitfield(piece_table, PeerId, [H|T], File_mutex_pid) ->
     Has = [X || {1, X} <- [H|T]],
     insert_to_table(piece_table, Has, PeerId),
-    mutex:request(compare_bitfield, [File_mutex_pid, [H|T]]).
+    file_storage:compare_bitfield(File_mutex_pid, [H|T]).
     
 %% inner function of insert_bitfield
 insert_to_table(piece_table, [Has|T], PeerId) ->
@@ -150,7 +150,7 @@ update_bitfield(piece_table, PeerId, PieceIndex, File_mutex_pid) ->
 	_found ->
 	    [{PieceIndex, {Hash, Peers}}] = Result,
 	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
-	    mutex:request(have, [File_mutex_pid, PieceIndex])
+	    file_storage:have(File_mutex_pid, PieceIndex)
     end.
     
 %% read the list of peers that has a certain piece by 
