@@ -126,8 +126,10 @@ am_choked_interested(am_unchoked, State) ->
 	    {Begin, Length} = Any,
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    io:format("request sent, going reloop~n"),
+	    mutex:received(State#state.piece_storage),
 	    {next_state, am_unchoked_interested, State};
 	{hold} -> 
+	    mutex:received(State#state.piece_storage),
 	    {next_state, am_choked_uninterested, State}
     end.
 
@@ -141,8 +143,10 @@ am_unchoked_interested({piece_complete, Index}, State) ->
 	{ok, Index} -> 
 	    {Begin, Length} = file_storage:what_chunk(State#state.file_storage, Index),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
+	    mutex:received(State#state.piece_storage),
 	    {next_state, am_unchoked_interested, State};
 	hold -> 
+	    mutex:received(State#state.piece_storage),
 	    {next_state, am_choked_uninterested, State}
     end;
 am_unchoked_interested({piece_incomplete, Index}, State) ->
