@@ -68,8 +68,6 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    case gen_tcp:recv(Socket, 5) of
 		{ok, <<4, Piece_index:32>>} ->
 		    %%have
-		    io:format("~n*****~w*****Have len=5, id=4, piece_index=~w ~n", 
-			      [self(), Piece_index]),
 		    Msg_reader_pid ! {have, Piece_index},
 		    message_handler:done(Parent)
 	    end;
@@ -114,6 +112,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%piece
 		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w~n", 
 			      [self(), Len-9, Index, Begin]),
+		    io:format("~n~n~n~nPIEEEEECEEEEEEE~n~n~n"),
 		    Msg_reader_pid ! {piece, Index, Begin, Block, Block_len},
 		    message_handler:done(Parent)
 	    end;

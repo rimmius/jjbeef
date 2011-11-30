@@ -1,7 +1,7 @@
 %%%Created by: Fredrik Gustafsson
 %%%Date: 16-11-2011
 -module(file_storage).
--export([start/4, init/4, get_bitfield/1, insert_chunk/5, compare_bitfield/2, have/2, what_chunk/2]).
+-export([start/4, init/4]).
 
 start(Dl_storage_pid, Files, Length, Piece_length) ->
     spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length]).
@@ -18,36 +18,41 @@ initiate_data(_Nr, _Length) ->
 
 loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
     receive
-	{bitfield, From} ->
-	    From ! {reply, Bitfield},
+	{request, get_bitfield, [], From} ->
+	    Reply = strip_bitfield(Bitfield, 0, length(Bitfield)-1),
+	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
-	{insert_chunk, From, Index, Begin, Block, Length_of_block} ->
+	{request, insert_chunk, [Index, Begin, Block, Block_length], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
 		    Chunk_table_id = ets:new(piece, [ordered_set]),
-		    ets:insert(Chunk_table_id, {Begin, Block, Length_of_block}),
+		    ets:insert(Chunk_table_id, {Begin, Block, Block_length}),
 		    ets:insert(Table_id, {Index, Chunk_table_id});
 		[{Index, Chunk_table_id}] ->
-		    ets:insert(Chunk_table_id, {Begin, Block, Length_of_block})
+		    ets:insert(Chunk_table_id, {Begin, Block, Block_length})
 	    end,
-	    From ! {reply, {Index, Chunk_table_id, Piece_length, Dl_storage_pid}},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
-	{write_to_file, From} ->
 	    {ok , Io} = file:open(H, [write]),
-	    ok =  write_to_file(Table_id, 1, Length, Io, Piece_length),
+	    ok =  write_to_file(Table_id, 0, Length, Io, Piece_length),
 	    ok = file:close(Io),
 	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length, Dl_storage_pid),
-	    From ! {reply, ok},
+	    From ! {reply, check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid)},
 	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
-	{chunk_table, From, Index} ->
+	{request, compare_bitfield, [Peer_bitfield], From} ->
+	    From ! {reply, am_interested(Bitfield, Peer_bitfield, 0, length(Bitfield)-1)},
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
+	{request, have, [Index], From} ->
+	    From ! {reply, have(Index, Bitfield)},
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
+	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
 		    Chunk_table_id = ets:new(piece, [ordered_set]),
 		    ets:insert(Table_id, {Index, Chunk_table_id}),
-		    From ! {reply, Chunk_table_id, Piece_length};
-	    [{Index, Chunk_table, _Length_of_block}] ->
-		    From ! {reply, Chunk_table, Piece_length}
+		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length);
+		[{Index, Chunk_table_id}] ->
+		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length)
 	    end,
+	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length)
     end.
 
@@ -66,19 +71,13 @@ check_piece(Acc, Index, Chunk_table_id, Piece_length, Dl_storage_pid) when Acc <
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    0;
-	{_Begin, _Block, Length_of_block} ->
+	[{_Begin, _Block, Length_of_block}] ->
 	    check_piece(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Dl_storage_pid)
     end;
 check_piece(_Acc, Index, _Chunk_table_id, _Piece_length, Dl_storage_pid) ->
     mutex:request(Dl_storage_pid, delete_piece, [Index]),
+    mutex:received(Dl_storage_pid),
     1.
-
-get_bitfield(File_storage_pid) ->
-    File_storage_pid ! {bitfield, self()},
-    receive
-	{reply, Reply} ->
-	    strip_bitfield(Reply, 0, length(Reply)-1)
-    end.
 
 strip_bitfield(Bitfield, Acc, Max) when Acc =< Max ->
     {value, {Have, _Index}} = lists:keysearch(Acc, 2, Bitfield),
@@ -86,26 +85,12 @@ strip_bitfield(Bitfield, Acc, Max) when Acc =< Max ->
 strip_bitfield(_Bitfield, _Acc, _Max) ->
     [].
 
-insert_chunk(File_storage_pid, Index, Begin, Block, Block_length) ->
-    File_storage_pid ! {insert_chunk, self(), Index, Begin, Block, Block_length},
-    receive
-	{reply, Reply} ->
-	    Reply
-    end,
-    File_storage_pid ! {write_to_file, self()},
-    receive
-	{reply, Reply2} ->
-	    Reply2
-    end,
-    {Index, Chunk_table_id, Piece_length, Dl_storage_pid} = Reply,
-    check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid).
-
 write_to_file(Table_id, Acc, Length, Io, Piece_length) when Acc =< Length ->
     case ets:lookup(Table_id, Acc) of
 	[] ->
 	    write_to_file(Table_id, Acc+1, Length, Io, Piece_length);
 	[{Acc, Chunk_table_id}]  ->
-	    write_out_chunks(Chunk_table_id, 1, Piece_length, Io),
+	    write_out_chunks(Chunk_table_id, 0, Piece_length, Io),
 	    write_to_file(Table_id, Acc+1, Length, Io, Piece_length)
     end;
 write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
@@ -116,18 +101,11 @@ write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc < Piece_length 
 	[] ->
 	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
 	[{Acc, Chunk, Block_length}] ->
-	    file:write(Io, Chunk),
+	    file:write(Io, <<Chunk:Block_length>>),
 	    write_out_chunks(Chunk_table_id, Acc+Block_length, Piece_length, Io)
     end;
 write_out_chunks(_Chunk_table_id, _Acc, _Piece_length, _Io) ->
     ok.
-
-compare_bitfield(File_storage_pid, Peer_bitfield) ->
-    File_storage_pid ! {bitfield, self()},
-    receive
-	{reply, Our_bitfield} ->
-	    am_interested(Our_bitfield, Peer_bitfield, 0, length(Our_bitfield)-1)
-    end.
 
 am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
     {value, {Have, Acc}} = lists:keysearch(Acc, 2, Peer_bitfield),
@@ -146,34 +124,20 @@ am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
 am_interested(_Our_bitfield, _Peer_bitfield, _Acc, _Max) ->
     false.
 	
-have(File_storage_pid, Index) ->
-    File_storage_pid ! {bitfield, self()},
-    receive
-	{reply, Bitfield} ->
-	    {value, {Have, Index}} = lists:keysearch(Index, 2, Bitfield),
-	    case Have of
-		0 ->
-		    true;
-		1  ->
-		    false
-	    end
-    end.  
-
-what_chunk(File_storage_pid, Index) ->
-    File_storage_pid ! {chunk_table, self(), Index},
-    io:format("~n~nTRYING TO GET CHUNK~n~w~nIndex=~w~n~n", [File_storage_pid, Index]),
-    receive
-	{reply, Chunk_table_id, Piece_length} ->
-	    io:format("~n~n~nHEEEEEEEEEEEERE~n~n"),
-	    {Begin, Block_length} = what_chunk(0, Index, Chunk_table_id, Piece_length),
-	    {Begin, Block_length}
+have(Index, Bitfield) ->
+    {value, {Have, Index}} = lists:keysearch(Index, 2, Bitfield),
+    case Have of
+	0 ->
+	    true;
+	1  ->
+	    false
     end.
 
 what_chunk(Acc, Index, Chunk_table_id, Piece_length) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    {Acc, 16384};
-	{_Begin, _Block, Block_length} ->
+	[{_Begin, _Block, Block_length}] ->
 	    what_chunk(Acc+Block_length, Index, Chunk_table_id, Piece_length)
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length) ->

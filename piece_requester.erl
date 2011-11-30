@@ -86,8 +86,8 @@ send_event(Pid, bitfield, Bitfield_in_list) ->
 init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Socket, Peer_id]) ->
     Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     io:format("msg_handler started~n"),
-	My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
-	mutex:received(File_storage_pid),
+    My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
+    mutex:received(File_storage_pid),
     message_handler:send(Msg_handler_pid, bitfield, My_bitfield_in_list),
     io:format("my bitfiled sent~n"),
     io:format("init complete~n"),
@@ -126,7 +126,7 @@ am_choked_interested(am_unchoked, State) ->
 	{ok, Index} -> 
 	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
-		mutex:received(State#state.file_storage),
+	    mutex:received(State#state.file_storage),
 	    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    {next_state, am_unchoked_interested, State};
