@@ -49,6 +49,9 @@ loop(piece_table, Nr_of_pieces, File_storage_pid)->
 		    Reply = delete_piece(piece_table, Index);
 		get_rarest ->
 		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
+		get_rarest_index ->
+		    [PeerId] = Args,
+		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces);
 		putback ->
 		    [Piece] = Args,
 		    Reply = putback(piece_table, Piece)
@@ -60,6 +63,32 @@ loop(piece_table, Nr_of_pieces, File_storage_pid)->
 
 delete_piece(piece_table, Index) ->
     ets:delete(piece_table, Index).
+
+get_rarest_index(piece_table,PeerId,Nr_of_pieces)->
+    RarestList = get_rarest(piece_table,0,Nr_of_pieces,[]),
+    get_rarest_index_inner(piece_table,PeerId,RarestList).
+get_rarest_index_inner(piece_table,PeerId,[H|T])->
+    {Index,[P|Peers]}=H,
+    Reply = compare(PeerId,[P|Peers],Index),
+    case Reply of
+	{ok,Index}->
+	    {ok,Index};
+	{hold} ->
+	    get_rarest_index_inner(piece_table,PeerId,T)
+    end;
+get_rarest_index_inner(piece_table,_PeerId,[])->
+    {hold}.
+
+compare(PeerId,[P|Peers],Index)->
+    case PeerId == P of
+	true ->
+	    {ok,Index};
+	false ->
+	    compare(PeerId,Peers,Index)
+    end;
+compare(_PeerId,[],_Index) ->
+    {hold}.
+
 
 get_rarest(piece_table, Acc, Max, Rarest_list) when Acc =< Max ->
     [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
@@ -91,17 +120,29 @@ insert_bitfield(piece_table, PeerId, [H|T], File_storage_pid) ->
     
 %% inner function of insert_bitfield
 insert_to_table(piece_table, [Has|T], PeerId) ->
-    [{Index, {Hash, Peers}}] = ets:lookup(piece_table, Has),
-     ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
-     insert_to_table(piece_table, T, PeerId);
+    Result = ets:lookup(piece_table,Has),
+    case Result of 
+	[]->
+	    non_existent;
+	_found ->
+	    [{Index, {Hash, Peers}}] = Result,
+	    ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
+	    insert_to_table(piece_table, T, PeerId)
+     end;
 insert_to_table(piece_table, [], _PeerId) ->
      has_inserted.
 
 %% update piece storage when a have message is received
 update_bitfield(piece_table, PeerId, PieceIndex, File_storage_pid) ->
-    [{PieceIndex, {Hash, Peers}}] = ets:lookup(piece_table, PieceIndex),
-    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
-    file_storage:have(File_storage_pid, PieceIndex).
+    Result = ets:lookup(piece_table,PieceIndex),
+    case Result of
+	[]->
+	    non_existent;
+	_found ->
+	    [{PieceIndex, {Hash, Peers}}] = Result,
+	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
+	    file_storage:have(File_storage_pid, PieceIndex)
+    end.
     
 %% read the list of peers that has a certain piece by 
 %% providing the piece index. 
