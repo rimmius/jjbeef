@@ -5,6 +5,20 @@
 -module(peer_storage).
 -export([start/0, init/0]).
 
+%%---------------------------------------------------------------------
+%% Record definition
+%% Data Type: peer
+%% where:
+%%    peerid: A process id  (default is undefined).
+%%    interested: An integer (default is 0).
+%%    choke: An integer (default is 1). 
+%%    ip: An ip address (default is undefined).
+%%    socket: An integer (default is undefined).
+%%    port: An integer (default is undefined).    
+%%    request: A string (default is undefined).
+%%----------------------------------------------------------------------
+
+
 -record(peer, {peerid = undefined, interested = 0, choke = 1, 
 	       ip = undefined, socket = undefined,
 	       port = undefined, request = undefined}).
