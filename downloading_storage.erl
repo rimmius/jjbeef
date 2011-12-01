@@ -24,17 +24,14 @@ loop(Tid, Piece_storage_pid) ->
 		    [PieceIndex, Tuple,Pid]
 			= Args,
 		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
-		delete_piece ->
-		    [PieceIndex, From] = Args,
-		    From ! {reply, delete_piece(Tid, PieceIndex)};
 		delete_peer ->
 		    [PieceIndex, PeerId] = Args,
 		    Reply = delete_peer(Tid, PieceIndex, PeerId),
 		    case Reply of
 			true -> From ! {reply, Reply};
 			_piece -> Piece_storage_pid ! {putback, Reply},
-				  From ! {reply, has_putback},
-				  delete_piece(Tid, PieceIndex)
+				  From ! {reply, has_putback}
+				  %delete_piece(Tid, PieceIndex)
 		    end
 	    end,
 	    loop(Tid, Piece_storage_pid);
@@ -60,8 +57,6 @@ delete_peer(Tid, PieceIndex, PeerId)->
     end.
 
 %% return the piece to be put back in the piece_storage
-find_
-
 
 
 put_back(Tid, PieceIndex)->
