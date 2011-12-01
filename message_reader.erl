@@ -15,12 +15,16 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	    mutex:received(Piece_mutex_pid),
 	    
 	    %% get interest from file storage
-	    Am_interested = mutex:request(File_storage_pid, compare_bitfield, [Bitfield_in_list]),
+	    {ok, List_of_interest} = mutex:request(File_storage_pid, compare_bitfield, [Bitfield_in_list]),
 	    mutex:received(File_storage_pid),
 	    
-	    %% TODO change interest
-	    piece_requester:send_event(Grandparent, bitfield, Bitfield_in_list),
-	    piece_requester:send_event(Grandparent, am_interested, Am_interested);
+	    %% save in fsm bitfield and interest
+	    piece_requester:send_event(Grandparent, interested_index, List_of_interest),
+	    case length(List_of_interest) of
+		[] ->  piece_requester:send_event(Grandparent, am_interested, false);
+		_ ->  piece_requester:send_event(Grandparent, am_interested, true)
+	    end;
+	   
 	{have, Piece_index} ->
 	    %% update piece storage
 	    mutex:request(Piece_mutex_pid, update_bitfield, [Peer_id, Piece_index]),
