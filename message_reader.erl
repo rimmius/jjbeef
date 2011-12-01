@@ -10,14 +10,25 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	{bitfield, Bitfield, Bitfield_len} ->
 	    %%io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
 	    Bitfield_in_list = make_bitfield_with_index(<<Bitfield:Bitfield_len>>, 0),
-	    Am_interested = mutex:request(Piece_mutex_pid, insert_bitfield, [Peer_id, Bitfield_in_list]),
+	    %% update piece storage
+	    mutex:request(Piece_mutex_pid, insert_bitfield, [Peer_id, Bitfield_in_list]),
 	    mutex:received(Piece_mutex_pid),
+	    
+	    %% get interest from file storage
+	    Am_interesed = mutex:request(File_storage_pid, compare_bitfield, [Bitfieldin_list]),
+	    mutex:received(File_storage_pid),
+	    
 	    %% TODO change interest
 	    piece_requester:send_event(Grandparent, bitfield, Bitfield_in_list),
 	    piece_requester:send_event(Grandparent, am_interested, Am_interested);
 	{have, Piece_index} ->
-	    Am_interested = mutex:request(Piece_mutex_pid, update_bitfield, [Peer_id, Piece_index]),
+	    %% update piece storage
+	    mutex:request(Piece_mutex_pid, update_bitfield, [Peer_id, Piece_index]),
 	    mutex:received(Piece_mutex_pid),
+
+	    %% get interest from file storage
+	    Am_interested = mutex:request(File_storage_pid, have, [Piece_index]),
+	    mutex:received(File_storage_pid),
 	    case Am_interested of
 		true -> piece_requester:send_event(Grandparent, am_interested, Am_interested);
 		false -> ok %% TODO!!!! or not.
