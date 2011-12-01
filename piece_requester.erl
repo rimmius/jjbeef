@@ -121,16 +121,14 @@ am_choked_uninterested(am_unchoked, State) ->
 am_choked_interested(am_unchoked, State) ->
     io:format("~n~n~n~w~nPIECE_STORAGE_PID~n", [State#state.piece_storage]),
     Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),
+    mutex:received(State#state.piece_storage),
     
     %% TODO remove drom downloadin storage
     case Reply of
 	{ok, Index, Data} ->
 	    %% write the piece into dl_sto and remove it from piece_sto
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
-	    mutex:received(State#state.download_storage),
-	    io:format("download_storage write piece done pid:~w~n", [self()]),
-	    mutex:request(State#state.piece_storage, delete_piece, [Index]),
-	    mutex:received(State#state.piece_storage),
+	    mutex:received(State#state.download_storage),	    
 	    
 	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
@@ -148,16 +146,14 @@ am_choked_interested(am_unchoked, State) ->
 am_unchoked_interested(am_choked, State) ->
     {next_state, am_choked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
-    Reply = mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id),
-    
+    Reply = mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id),    
+    mutex:received(State#state.piece_storage),
+
     case Reply of
 	{ok, Index, Data} -> 
 	    %% write the piece into dl_sto and remove it from piece_sto
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),
-	    io:format("download_storage write piece done pid:~w~n", [self()]),
-	    mutex:request(State#state.piece_storage, delete_piece, [Index]),
-	    mutex:received(State#state.piece_storage),
 
 	    {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
 	    mutex:received(State#state.file_storage),
