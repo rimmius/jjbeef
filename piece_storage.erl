@@ -46,6 +46,9 @@ loop(piece_table, Nr_of_pieces)->
 		delete_piece ->
 		    [Index] = Args,
 		    Reply = delete_piece(piece_table, Index);
+		put_piece_back ->
+		    [Index,Hash,Peers]=Args,
+		    Reply = put_piece_back(piece_table,Index,Hash,Peers);
 		get_rarest ->
 		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
 		get_rarest_index ->
@@ -68,6 +71,9 @@ loop(piece_table, Nr_of_pieces)->
 
 delete_piece(piece_table, Index) ->
     ets:delete(piece_table, Index).
+
+put_piece_back(piece_table,Index,Hash,Peers)->
+    ets:insert(piece_table,{Index,{Hash,Peers}}).
 
 get_rarest_index(piece_table,PeerId,Nr_of_pieces)->
     RarestList = get_rarest(piece_table,0,Nr_of_pieces,[]),
