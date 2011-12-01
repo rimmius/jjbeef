@@ -29,7 +29,7 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
     Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
     link(Tracker_pid),
     spawn(fun() ->send_to_tracker(connect_to_tracker:make_list(Tracker_list, []), Tracker_pid, Peers_pid, Dl_pid) end),
-    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid).
+    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, 0).
 
 send_to_tracker([],  _Tracker_pid, _Peers_pid, _Dl_pid) ->
     exit(self(), kill);
@@ -42,44 +42,55 @@ send_to_tracker([H|T], Tracker_pid, Peers_pid, Dl_pid) ->
 	    io:format("connecting to next tracker in list ~n"),
 	    send_to_tracker( T, Tracker_pid, Peers_pid, Dl_pid)
     end.
-loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid) ->
+loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers) ->
     receive
 	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
-	    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
-					 Sock, Port, undefined]),
-	    mutex:received(Peer_storage_pid),
-	    piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid, Sock, Peer_id),
-	    From ! {reply, ok},
-	    io:format("~n~nIN THE LOOP SENT MESS BACK"),
-	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
+	    case Nr_of_peers > 30 of
+		true ->
+		    gen_tcp:close(Sock),
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers);
+		_ ->
+		    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
+								      Sock, Port, undefined]),
+		    mutex:received(Peer_storage_pid),
+		    piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid, Sock, Peer_id),
+		    From ! {reply, ok},
+		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, (Nr_of_peers+1))
+	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case gen_tcp:connect(Host, Port, [binary, {active, false},
-					      {packet, 0}], 1000) of
-		{ok, Sock} ->
-		    Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>,
-					  <<3,2,1,3,2,1,2,3>>,Info,
-					  list_to_binary(Peer_id)]),
-		    ok = gen_tcp:send(Sock, Msg),
-		    io:format("Sent handshake to peer from tracker~n"),
-		    From ! {reply, ok, Sock},
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid);
-		{error, Reason} ->
-		    io:format(Reason),
-		    From ! {error, Reason},
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid)
+	    case Nr_of_peers > 30 of
+		true ->
+		     loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers);
+		_ ->
+		    case gen_tcp:connect(Host, Port, [binary, {active, false},
+						      {packet, 0}], 1000) of
+			{ok, Sock} ->
+			    Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>,
+						  <<3,2,1,3,2,1,2,3>>,Info,
+						  list_to_binary(Peer_id)]),
+			    ok = gen_tcp:send(Sock, Msg),
+			    io:format("Sent handshake to peer from tracker~n"),
+			    From ! {reply, ok, Sock},
+			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers);
+			{error, Reason} ->
+			    io:format(Reason),
+			    From ! {error, Reason},
+			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers)
+		    end
 	    end;
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
-	    loop(peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid);		
+	    loop(peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Nr_of_peers);		
 	{'EXIT', Piece_storage_pid, Reason} ->
 	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without piece_storage"),
-	    loop(Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid);
+	    loop(Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Nr_of_peers);
 	{'EXIT', File_storage_pid, Reason} ->
 	    io:format("exit file_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without file_storage"),
-	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid)
+	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Nr_of_peers)
     end.
 
 insert_new_peers(List_raw, Peers_pid, Dl_pid) ->

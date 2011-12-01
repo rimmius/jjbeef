@@ -51,9 +51,13 @@ loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
-		    {ok, Index, _Tuple} = Reply,
-		    delete_piece(piece_table, Index),
-		    Reply;
+		    case Reply of
+			{ok, Index, _Tuple} ->
+			    delete_piece(piece_table, Index),
+			    Reply;
+			{hold} ->
+			    Reply
+		    end;
 		    %% case Reply of 
 		    %% 	{ok,Index}->
 		    %% 	    {Index,{Hash,Peers}} = read_piece(piece_table,Index),
@@ -106,12 +110,18 @@ compare(_PeerId,[],_Index) ->
 
 
 get_rarest(piece_table, Acc, Max, Rarest_list) when Acc =< Max ->
-    [{Index, {_Hash, Peers}}] = ets:lookup(piece_table, Acc),
-    case length(Peers) of
-	0 ->
+    io:format("~n~n~nHAAAAAAAAAAAAAAAER111111111111111~n~n"),
+    case ets:lookup(piece_table, Acc) of
+	[] ->
 	    get_rarest(piece_table, Acc+1, Max, Rarest_list);
-	_Nr  ->
-	    get_rarest(piece_table, Acc+1, Max, place_rarest(Index, Peers, Rarest_list, []))
+	[{Index, {_Hash, Peers}}] ->
+	    io:format("~n~n~nHAAAAAAAAAAAAAAAER222222222222~n~n"),
+	    case length(Peers) of
+		0 ->
+		    get_rarest(piece_table, Acc+1, Max, Rarest_list);
+		_Nr  ->
+		    get_rarest(piece_table, Acc+1, Max, place_rarest(Index, Peers, Rarest_list, []))
+	    end
     end;
 get_rarest(piece_table, _Acc, _Max, Rarest_list) ->
     Rarest_list.
