@@ -11,30 +11,27 @@ start() ->
 %% get the pid of piece_storage to be able to put the piece back
 init() ->
     Tid = ets:new(db, []),
-    receive
-	{piece_storage, Piece_storage_pid} ->
-	    loop(Tid, Piece_storage_pid)
-    end.
+    loop(Tid).
 
-loop(Tid, Piece_storage_pid) ->
+loop(Tid) ->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
 		write_piece ->
 		    [PieceIndex, Tuple,Pid]
 			= Args,
-		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
-		delete_peer ->
-		    [PieceIndex, PeerId] = Args,
-		    Reply = delete_peer(Tid, PieceIndex, PeerId),
-		    case Reply of
-			true -> From ! {reply, Reply};
-			_piece -> Piece_storage_pid ! {putback, Reply},
-				  From ! {reply, has_putback}
-				  %delete_piece(Tid, PieceIndex)
-		    end
+		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)}
+		%% delete_peer ->
+		%%     [PieceIndex, PeerId] = Args,
+		%%     Reply = delete_peer(Tid, PieceIndex, PeerId),
+		%%     case Reply of
+		%% 	true -> From ! {reply, Reply};
+		%% 	%_piece -> Piece_storage_pid ! {putback, Reply},
+		%% 		  From ! {reply, has_putback}
+		%% 		  %delete_piece(Tid, PieceIndex)
+		%%     end
 	    end,
-	    loop(Tid, Piece_storage_pid);
+	    loop(Tid);
 	stop -> ok	
     end.
 
@@ -45,16 +42,16 @@ write(Tid, PieceIndex,Tuple,Pid) ->
 
 %% if peer has disconnected, remove its peerId from the list storing which
 %% peers are downloading the paticular piece.
-delete_peer(Tid, PieceIndex, PeerId)->
-    [PieceIndex, {PieceHash, AllPeerList, DownloadingPeerList}] =
-	ets:lookup(Tid, PieceIndex),
-    case DownloadingPeerList of
-	[_H|[]]->
-	    put_back(Tid, PieceIndex);
-	[_H|_T]->
-	    ets:insert(Tid, {PieceIndex, {PieceHash, AllPeerList,
-				DownloadingPeerList -- [PeerId]}})
-    end.
+%% delete_peer(Tid, PieceIndex, PeerId)->
+%%     [PieceIndex, {PieceHash, AllPeerList, DownloadingPeerList}] =
+%% 	ets:lookup(Tid, PieceIndex),
+%%     case DownloadingPeerList of
+%% 	[_H|[]]->
+%% 	    put_back(Tid, PieceIndex);
+%% 	[_H|_T]->
+%% 	    ets:insert(Tid, {PieceIndex, {PieceHash, AllPeerList,
+%% 				DownloadingPeerList -- [PeerId]}})
+%%     end.
 
 %% return the piece to be put back in the piece_storage
 
