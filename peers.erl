@@ -65,7 +65,7 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requ
 		    piece_requester_sup:start_child(Requester_sup_pid, [Sock, Peer_id]),
 		    From ! {reply, ok},
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, (Requester_sup_pid+1))
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid)
 	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case piece_requester_sup:get_children_num(Requester_sup_pid) > 30 of
