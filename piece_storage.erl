@@ -83,7 +83,8 @@ get_rarest_index_inner(piece_table,PeerId,[H|T])->
     Reply = compare(PeerId,[P|Peers],Index),
     case Reply of
 	{ok,Index}->
-	    {ok,Index};
+	    Tuple = read_piece(piece_table,Index),
+	    {ok,Index,Tuple};
 	{hold} ->
 	    get_rarest_index_inner(piece_table,PeerId,T)
     end;
