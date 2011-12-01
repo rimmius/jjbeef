@@ -153,7 +153,7 @@ am_unchoked_interested(am_choked, State) ->
 am_unchoked_interested(am_unchoked, State) ->
     {next_state, am_unchoked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
-    Reply = mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id),    
+    Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),    
     mutex:received(State#state.piece_storage),
 
     case Reply of
