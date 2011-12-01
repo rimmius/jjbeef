@@ -51,7 +51,7 @@ loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
-		    {ok, Index, Tuple} = Reply
+		    {ok, Index, _Tuple} = Reply,
 		    delete_piece(piece_table, Index),
 		    Reply;
 		    %% case Reply of 
