@@ -114,7 +114,9 @@ init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, S
 %%--------------------------------------------------------------------
 %% state 1
 am_choked_uninterested(am_unchoked, State) ->
-    {next_state, am_unchoked_uninterested, State}.
+    {next_state, am_unchoked_uninterested, State};
+am_choked_uninterested(am_choked, State) ->
+    {next_state, am_choked_uninterested, State}.
 %% and keep_alive
 
 %% state 2
@@ -137,14 +139,19 @@ am_choked_interested(am_unchoked, State) ->
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    {next_state, am_unchoked_interested, State};
 	{hold} -> 
-	    {next_state, am_choked_uninterested, State}
-    end.
+	    {next_state, am_unchoked_uninterested, State} %%, 10000} 
+		%% timeout
+    end;
+am_choked_interested(am_choked, State) ->
+	{next_state, am_choked_interested, State}.
 
 %% and keep_alive
     
 %% state 3
 am_unchoked_interested(am_choked, State) ->
     {next_state, am_choked_interested, State};
+am_unchoked_interested(am_unchoked, State) ->
+    {next_state, am_unchoked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
     Reply = mutex:request(State#state.piece_storage, get_rarest_index, State#state.peer_id),    
     mutex:received(State#state.piece_storage),
@@ -161,7 +168,7 @@ am_unchoked_interested({piece_complete, Index}, State) ->
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    {next_state, am_unchoked_interested, State};
 	{hold} -> 
-	    {next_state, am_choked_uninterested, State}
+	    {next_state, am_unchoked_uninterested, State}
     end;
 am_unchoked_interested({piece_incomplete, Index}, State) ->
     {Begin, Length} = mutex:request(State#state.file_storage, what_chunk, [Index]),
@@ -173,7 +180,9 @@ am_unchoked_interested({piece_incomplete, Index}, State) ->
 
 %% state 4
 am_unchoked_uninterested(am_choked, State) ->
-    {next_state, am_choked_uninterested, State}.
+    {next_state, am_choked_uninterested, State};
+am_unchoked_uninterested(am_unchoked, State) ->
+    {next_state, am_unchoked_uninterested, State}.
 %% and keep_alive
     
 %%--------------------------------------------------------------------
