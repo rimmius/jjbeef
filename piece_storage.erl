@@ -62,8 +62,9 @@ loop(piece_table, Nr_of_pieces)->
 	    From ! {reply, Reply},
 	    loop(piece_table, Nr_of_pieces);
 	stop -> ok;
-	Anything  ->
-	    io:format("~n~n~n~w~n~n", [Anything])
+	_Anything  ->
+	    io:format("~n~n~n~w~n~n", [_Anything]),
+	    loop(piece_table, Nr_of_pieces)
     end.
 
 delete_piece(piece_table, Index) ->
@@ -175,7 +176,7 @@ delete_peer(piece_table,PeerId,Index) ->
 	    has_deleted;
 	false ->
 	    [{Index,{Piecehash,Peers}}] = ets:lookup(piece_table,Index),
-	     ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
+	    ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
 	    delete_peer(piece_table,PeerId,Index+1)
     end.
 
@@ -325,34 +326,6 @@ get_piece_hash_test_() ->
     }.
 
 %% Id:                 6 
-%% Title:              Put back piece
-%% Purpose:            Ensure correct insertion of piece and its info 
-%% Prerequisites:      Existing piece table
-%% Expected result:    The piece is correctly inserted with all its info
-%% Pass/Fail criteria: When run response is "All tests passed"/When run 
-%%                     response is error
-
-putback_test_() ->
-    {spawn,
-     {setup,
-      fun setup/0,
-      fun cleanup/1,
-      fun() ->
-	      ?MODULE ! {request, insert_bitfield, 
-			 [peer1, [{1,0}, {1,1}, {0,2}]], self()},
-	      receive {reply, _} -> ok end,
-
-	      ?MODULE ! {request, putback, [{3, {hash3, [peer3]}}], self()},
-	      receive {reply, _} -> ok end,
-   
-	      [?assertMatch([{3, {hash3, [peer3]}}], 
-			     ets:lookup(piece_table, 3)),
-	       ?assertMatch([{2, {hash2, []}}], ets:lookup(piece_table, 2))]
-      end
-     }
-    }.
-
-%% Id:                 7 
 %% Title:              Delete piece
 %% Purpose:            Be able to delete a piece when it has been downloaded 
 %% Prerequisites:      Existing piece table, with pieces
@@ -379,7 +352,7 @@ delete_piece_test_() ->
      }
     }.
 
-%% Id:                 8 
+%% Id:                 7 
 %% Title:              Delete peer
 %% Purpose:            Be able to delete a peer that has disconnected 
 %% Prerequisites:      Existing piece table with pieces
