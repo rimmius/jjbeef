@@ -42,7 +42,7 @@ loop(Children, Storage) ->
     process_flag(trap_exit, true),
     receive
 	{start_child, From, Data} ->
-	    Child = piece_requester:start_link(Storage#storage.peer_storage, Storage#storage.piece_storage, Storage#storage.file_storage, Storage#storage.download_storage, Data#data.socket, Data#data.peer_id),
+	    Child = piece_requester:start_link(self(), Storage#storage.peer_storage, Storage#storage.piece_storage, Storage#storage.file_storage, Storage#storage.download_storage, Data#data.socket, Data#data.peer_id),
 	    From ! {reply, ok},
 	    loop([{Child, Data} | Children], Storage);
 	{get_children_num, From} ->
