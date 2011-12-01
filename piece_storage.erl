@@ -50,7 +50,10 @@ loop(piece_table, Nr_of_pieces, File_mutex_pid, Dl_mutex_pid)->
 		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
 		get_rarest_index ->
 		    [PeerId] = Args,
-		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces);
+		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
+		    {ok, Index, Tuple} = Reply
+		    delete_piece(piece_table, Index),
+		    Reply;
 		    %% case Reply of 
 		    %% 	{ok,Index}->
 		    %% 	    {Index,{Hash,Peers}} = read_piece(piece_table,Index),
