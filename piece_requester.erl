@@ -11,7 +11,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/5, send_event/3]).
+-export([start_link/6, send_event/3]).
 
 %% gen_fsm callbacks
 -export([init/1, am_choked_uninterested/2, am_choked_interested/2, am_unchoked_interested/2, am_unchoked_uninterested/2, state_name/3, handle_event/3,
@@ -19,7 +19,7 @@
 
 %% -define(SERVER, ?MODULE).
 
--record(state, {piece_storage, file_storage, msg_handler, peer_id, bitfield}).
+-record(state, {piece_storage, file_storage, download_storage, msg_handler, peer_id, bitfield}).
 
 %%%===================================================================
 %%% API
@@ -35,9 +35,9 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link(Peer_mutex_pid, Piece_mutex_pid, 
-	   File_storage_pid, Socket, Peer_id) ->
+	   File_storage_pid, Download_storage_pid, Socket, Peer_id) ->
     io:format("going to start fsm~n"),
-    gen_fsm:start_link(?MODULE, [Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Socket, Peer_id], []),
+    gen_fsm:start_link(?MODULE, [Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id], []),
     io:format("fsm started~n").
 
 send_event(Pid, am_interested, Am_interested) ->
@@ -83,7 +83,7 @@ send_event(Pid, bitfield, Bitfield_in_list) ->
 %%                     {stop, StopReason}
 %% @end
 %%--------------------------------------------------------------------
-init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Socket, Peer_id]) ->
+init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id]) ->
     Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     io:format("msg_handler started~n"),
     My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
@@ -94,6 +94,7 @@ init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Socket, Peer_id]) ->
     {ok, am_choked_uninterested, #state{piece_storage = Piece_mutex_pid,
 					msg_handler = Msg_handler_pid,
 					file_storage = File_storage_pid,
+					download_storage = Download_storage_pid,
 					peer_id = Peer_id}}.
 
 %%--------------------------------------------------------------------
