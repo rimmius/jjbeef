@@ -15,7 +15,7 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	    mutex:received(Piece_mutex_pid),
 	    
 	    %% get interest from file storage
-	    Am_interesed = mutex:request(File_storage_pid, compare_bitfield, [Bitfieldin_list]),
+	    Am_interested = mutex:request(File_storage_pid, compare_bitfield, [Bitfield_in_list]),
 	    mutex:received(File_storage_pid),
 	    
 	    %% TODO change interest
