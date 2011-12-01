@@ -62,8 +62,9 @@ loop(piece_table, Nr_of_pieces)->
 	    From ! {reply, Reply},
 	    loop(piece_table, Nr_of_pieces);
 	stop -> ok;
-	Anything  ->
-	    io:format("~n~n~n~w~n~n", [Anything])
+	_Anything  ->
+	    io:format("~n~n~n~w~n~n", [_Anything]),
+	    loop(piece_table, Nr_of_pieces)
     end.
 
 delete_piece(piece_table, Index) ->
