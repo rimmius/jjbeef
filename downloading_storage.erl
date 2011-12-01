@@ -20,7 +20,10 @@ loop(Tid) ->
 		write_piece ->
 		    [PieceIndex, Tuple,Pid]
 			= Args,
-		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)}
+		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
+		put_back ->
+		    [Pid] = Args,
+		    From ! {reply, put_back(Tid, Pid)}
 		%% delete_peer ->
 		%%     [PieceIndex, PeerId] = Args,
 		%%     Reply = delete_peer(Tid, PieceIndex, PeerId),
@@ -56,7 +59,7 @@ write(Tid, PieceIndex,Tuple,Pid) ->
 %% return the piece to be put back in the piece_storage
 
 
-put_back(Tid, PieceIndex)->
-   [PieceIndex, {PieceHash, AllPeerList,BadPeerId}] = 
-	ets:lookup(Tid, PieceIndex),
-   {PieceIndex, {PieceHash, AllPeerList--[BadPeerId]}}.
+put_back(Tid, Pid)->
+   [Pid, {Index, {Hash, Peers}}] = 
+	ets:lookup(Tid, Pid),
+   {Index, {Hash, Peers}}.
