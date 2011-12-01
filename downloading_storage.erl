@@ -20,10 +20,11 @@ loop(Tid, Piece_storage_pid) ->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
-		write_piece ->
-		    [PieceIndex, Tuple,Pid]
+		write ->
+		    [PieceIndex, PieceHash, AllPeerList, PeerId]
 			= Args,
-		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
+		    From ! {reply, write(Tid, PieceIndex, PieceHash, 
+					 AllPeerList, PeerId)};
 		delete_piece ->
 		    [PieceIndex, From] = Args,
 		    From ! {reply, delete_piece(Tid, PieceIndex)};
@@ -42,9 +43,9 @@ loop(Tid, Piece_storage_pid) ->
     end.
 
 %% insert new piece that has chosen to be downloaded
-write(Tid, PieceIndex,Tuple,Pid) ->
-    {PieceIndex,{Hash,Peers}} = Tuple,
-    ets:insert(Tid, {PieceIndex, {Hash, Peers,Pid}}).
+write(Tid, PieceIndex, PieceHash, AllPeerList, PeerId) ->
+    ets:insert(Tid, {PieceIndex, {PieceHash, AllPeerList, 
+				  PeerId}}).
 
 %% delete a piece that has been downloaded
 delete_piece(Tid, PieceIndex)->
