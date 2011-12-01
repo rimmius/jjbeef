@@ -63,7 +63,6 @@ loop(piece_table, Nr_of_pieces)->
 	    loop(piece_table, Nr_of_pieces);
 	stop -> ok;
 	_Anything  ->
-	    io:format("~n~n~n~w~n~n", [_Anything]),
 	    loop(piece_table, Nr_of_pieces)
     end.
 
@@ -98,12 +97,10 @@ compare(_PeerId,[],_Index) ->
 
 
 get_rarest(piece_table, Acc, Max, Rarest_list) when Acc =< Max ->
-    io:format("~n~n~nHAAAAAAAAAAAAAAAER111111111111111~n~n"),
     case ets:lookup(piece_table, Acc) of
 	[] ->
 	    get_rarest(piece_table, Acc+1, Max, Rarest_list);
 	[{Index, {_Hash, Peers}}] ->
-	    io:format("~n~n~nHAAAAAAAAAAAAAAAER222222222222~n~n"),
 	    case length(Peers) of
 		0 ->
 		    get_rarest(piece_table, Acc+1, Max, Rarest_list);
