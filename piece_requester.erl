@@ -128,6 +128,7 @@ am_choked_interested(am_unchoked, State) ->
 	    %% write the piece into dl_sto and remove it from piece_sto
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),
+	    io:format("download_storage write piece done pid:~w~n", [self()]),
 	    mutex:request(State#state.piece_storage, delete_piece, [Index]),
 	    mutex:received(State#state.piece_storage),
 	    
@@ -154,6 +155,7 @@ am_unchoked_interested({piece_complete, Index}, State) ->
 	    %% write the piece into dl_sto and remove it from piece_sto
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),
+	    io:format("download_storage write piece done pid:~w~n", [self()]),
 	    mutex:request(State#state.piece_storage, delete_piece, [Index]),
 	    mutex:received(State#state.piece_storage),
 
