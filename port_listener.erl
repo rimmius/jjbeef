@@ -62,7 +62,7 @@ recv(Socket, Dl_pid, Parent) ->
 	    end;
 	   
 	{ok, Data} ->	
-	    io:format("~nWTF IS THISSSS???????? " ++ binary_to_list(Data) ++ "~n");
+	    io:format("~nWTF IS THISSSS???????? ~w~n",[Data]);
 	{error, Reason} ->
 	    io:format("FYfAN: ~w~n", [Reason]),
 	    ok
