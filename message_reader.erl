@@ -1,9 +1,9 @@
 -module(message_reader).
--export([start/5]).
+-export([start_link/5]).
 -export([loop/5]).
 
-start(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
-    spawn(?MODULE, loop, [Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
+start_link(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
+    spawn_link(?MODULE, loop, [Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
 
 loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
     receive

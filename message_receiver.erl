@@ -7,17 +7,17 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_receiver).
--export([start/7, start_receiving/1]).
+-export([start_link/7, start_receiving/1]).
 -export([init/7, loop/3]).
 
-start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+start_link(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
       Socket, Peer_id) ->
-    spawn(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
-			  Socket, Peer_id]).
+    spawn_link(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+			       Socket, Peer_id]).
 
 init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
      Socket, Peer_id) ->
-    Msg_reader_pid = message_reader:start(Grandparent, 
+    Msg_reader_pid = message_reader:start_link(Grandparent, 
 					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 					  Peer_id),
     loop(Parent, Socket, Msg_reader_pid).

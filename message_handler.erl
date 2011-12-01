@@ -7,25 +7,25 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/6, send/3, done/1, error/2]).
+-export([start_link/6, send/3, done/1, error/2]).
 -export([loop/5, init/6]).
 
-start(Parent, Socket, Peer_id, 
+start_link(Parent, Socket, Peer_id, 
       Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
     io:format("~nMsg_handler started. ~n"),
-    spawn(?MODULE, init,
+    spawn_link(?MODULE, init,
 	  [Parent, Socket, Peer_id, 
 	   Peer_mutex_pid, Piece_mutex_pid, File_storage_pid]).
 
 %%done
 init(Parent, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
     io:format("~nmsg handler goes receiving!~n"),
-    Msg_recver_pid = message_receiver:start(Parent, self(), 
+    Msg_recver_pid = message_receiver:start_link(Parent, self(), 
 					    Peer_mutex_pid,
 					    Piece_mutex_pid, 
 					    File_storage_pid,
 					    Socket, Peer_id),
-    Msg_sender_pid = message_sender:start(self(), Socket),
+    Msg_sender_pid = message_sender:start_link(self(), Socket),
     ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).
 
@@ -58,7 +58,7 @@ loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
 		    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Rest)
 	    end;
 	{error, Msg_recver_pid} ->
-	    receive_error;
+	    exit(self(), recv_error);
 	{error, Msg_sender_pid} ->
-	    send_error	
+	    exit(self(), send_error)	
     end.

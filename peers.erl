@@ -19,7 +19,7 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
 
     File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, length(List_of_pieces), Piece_length]),
     link(File_storage_pid),
-    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces, File_storage_pid, Dl_storage_pid]),
+    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces]),
     link(Piece_storage_pid),
 
     Peers_pid = self(),
@@ -27,22 +27,29 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
     link(Port_listener_pid),
 
     {ok, Requester_sup_pid} = piece_requester_sup:start(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid), %% or link?
-
-    Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
-    link(Tracker_pid),
-    spawn(fun() ->send_to_tracker(connect_to_tracker:make_list(Tracker_list, []), Tracker_pid, Peers_pid, Dl_pid) end),
+   
+    spawn(fun() ->start_send(connect_to_tracker:make_list(Tracker_list, []), Peers_pid, Dl_pid, Length) end),
     loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid).
 
-send_to_tracker([],  _Tracker_pid, _Peers_pid, _Dl_pid) ->
+start_send([H|T], Peers_pid, Dl_pid, Length) ->
+    process_flag(trap_exit, true),
+    send_to_tracker([H|T], Peers_pid, Dl_pid, Length).
+send_to_tracker([],  _Peers_pid, _Dl_pid, _Length) ->
+    io:format("Empty list"),
     exit(self(), kill);
-send_to_tracker([H|T], Tracker_pid, Peers_pid, Dl_pid) ->
+send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
+    Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
+    link(Tracker_pid),
     Tracker_pid ! {connect, self(), H},
     receive
 	{ok, Peers} ->
-	    insert_new_peers(Peers, Peers_pid, Dl_pid)
+	    insert_new_peers(Peers, Peers_pid, Dl_pid);
+	{'EXIT', Tracker_pid, _Reason} ->
+	    io:format("connecting to next tracker in list from exit ~n"),
+	    send_to_tracker( T, Peers_pid, Dl_pid, Length)
     after 2000 ->
 	    io:format("connecting to next tracker in list ~n"),
-	    send_to_tracker( T, Tracker_pid, Peers_pid, Dl_pid)
+	    send_to_tracker( T, Peers_pid, Dl_pid, Length)
     end.
 loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid) ->
     receive
@@ -55,7 +62,7 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requ
 		    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 								      Sock, Port, undefined]),
 		    mutex:received(Peer_storage_pid),
-		    piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid, Sock, Peer_id),
+		    piece_requester_sup:start_child(Requester_sup_pid, [Sock, Peer_id]),
 		    From ! {reply, ok},
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, (Requester_sup_pid+1))
