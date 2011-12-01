@@ -74,9 +74,7 @@ check_piece(Acc, Index, Chunk_table_id, Piece_length, Dl_storage_pid) when Acc <
 	[{_Begin, _Block, Length_of_block}] ->
 	    check_piece(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Dl_storage_pid)
     end;
-check_piece(_Acc, Index, _Chunk_table_id, _Piece_length, Dl_storage_pid) ->
-    mutex:request(Dl_storage_pid, delete_piece, [Index]),
-    mutex:received(Dl_storage_pid),
+check_piece(_Acc, _Index, _Chunk_table_id, _Piece_length, _Dl_storage_pid) ->
     1.
 
 strip_bitfield(Bitfield, Acc, Max) when Acc =< Max ->
@@ -99,6 +97,7 @@ write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
 write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
+	    %% write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
 	    ok;
 	[{Acc, Chunk, Block_length}] ->
 	    file:write(Io, <<Chunk:Block_length>>),
