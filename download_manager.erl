@@ -20,6 +20,7 @@ init(File, _GUIPid) ->
 			    get_pieces({dict, Dict}), 
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict})),
+    link(Peers_pid),
     loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId()).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
@@ -63,8 +64,7 @@ loop(Peers_pid, Info_hash, Info_clean, My_id) ->
 	    From ! {reply, Info_hash},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id);
 	{'EXIT', Peers_pid, Reason} ->
-	    io:format("~w~n", Reason),
-	    loop(peers_pid_crash, Info_hash, Info_clean, My_id)
+	    io:format("Peerspid crashed!~w~n", Reason)
     end.
 
 get_torrent_data(File) ->

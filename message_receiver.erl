@@ -7,17 +7,17 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_receiver).
--export([start_link/7, start_receiving/1]).
+-export([start/7, start_receiving/1]).
 -export([init/7, loop/3]).
 
-start_link(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
       Socket, Peer_id) ->
-    spawn_link(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
-			       Socket, Peer_id]).
+    spawn(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+			  Socket, Peer_id]).
 
 init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
      Socket, Peer_id) ->
-    Msg_reader_pid = message_reader:start_link(Grandparent, 
+    Msg_reader_pid = message_reader:start(Grandparent, 
 					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 					  Peer_id),
     loop(Parent, Socket, Msg_reader_pid).
@@ -61,10 +61,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %% uninterested
 		    io:format("~n*****Uninterested len=1, id=3~n"),
 		    Msg_reader_pid ! {is_interested, 0},
-		    message_handler:done(Parent);
-		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
-		    message_handler:error(Parent, self())
+		    message_handler:done(Parent)
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,5>>} ->
@@ -72,10 +69,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		{ok, <<4, Piece_index:32>>} ->
 		    %%have
 		    Msg_reader_pid ! {have, Piece_index},
-		    message_handler:done(Parent);
-		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
-		    message_handler:error(Parent, self())
+		    message_handler:done(Parent)
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,13>>} ->
@@ -91,10 +85,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    io:format("~n*****~w*****Cancel len=13, id=8, index=~w, begin=~w, length=~w~n", 
 			      [self(), Index, Begin, Length]),
 		    %% NOTING IS DONE ATM
-		    message_handler:done(Parent);
-		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
-		    message_handler:error(Parent, self())
+		    message_handler:done(Parent)
 	    end;
 				  %% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,3>>} ->
@@ -104,10 +95,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    io:format("~n*****~w*****Port len=3, id=9, listen_port=~w ~n", 
 			      [self(), Listen_port]),
 		    Msg_reader_pid ! {port, Listen_port},
-		    message_handler:done(Parent);
-		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
-		    message_handler:error(Parent, self())
+		    message_handler:done(Parent)
 	    end;
 	   %% do_recv(Socket, Pid_message_reader);
 	{ok, <<Len:32/integer-big>>} ->
@@ -124,12 +112,8 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%piece
 		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w~n", 
 			      [self(), Len-9, Index, Begin]),
-		    io:format("~n~n~n~nPIEEEEECEEEEEEE~n~n~n"),
 		    Msg_reader_pid ! {piece, Index, Begin, Block, Block_len},
-		    message_handler:done(Parent);
-		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
-		    message_handler:error(Parent, self())
+		    message_handler:done(Parent)
 	    end;
 	    %%do_recv(Socket, Pid_message_reader);
 	{ok, _Data} ->

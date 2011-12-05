@@ -14,22 +14,22 @@ init(Dl_pid, Peers_pid, Length) ->
 loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid) ->
     receive
 	{connect, From, H} ->
-	     io:format("connect to tracker~n"),
+	    io:format("connect to tracker~n"),
+	    io:format(H ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
 	    {Peers, Min_time} = get_info(H ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
 	    From ! {ok, Peers},
 	    loop(Info, Min_time, My_id, H, Port, Length, Peers_pid, Dl_pid)
-    after Time ->
+    after 10000 ->
 	    case Tracker of
 		none ->
 		    loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid);
 		_ ->
 		    io:format("connect to tracker~n"),
-		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1&event=started"),
+		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" ++ integer_to_list(Length) ++ "&compact=1"),
 		    spawn(peers, insert_new_peers, [Peers, Peers_pid, Dl_pid]),
 		    loop(Info, Min_time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid)
 	    end
     end.	
-
 get_info(Url) ->
     inets:start(),
     {ok, {_,_,Result}} = httpc:request(Url),

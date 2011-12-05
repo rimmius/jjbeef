@@ -1,9 +1,9 @@
 -module(message_sender).
--export([start_link/2, send/3]).
+-export([start/2, send/3]).
 -export([loop/2, do_send/3]).
 
-start_link(Parent, Socket) ->
-    spawn_link(?MODULE, loop, [Parent, Socket]).
+start(Parent, Socket) ->
+    spawn(?MODULE, loop, [Parent, Socket]).
 
 send(Pid, Type, Msg) ->
     Pid ! {do_send, Type, Msg},

@@ -11,6 +11,7 @@ start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names}) ->
 
 %%Starts the Mutex and stores the pid of it in the loop
 init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
+    process_flag(trap_exit, true),
     Peer_storage_pid = mutex:start(peer_storage, []),
     link(Peer_storage_pid),
 
@@ -25,18 +26,15 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names) ->
     Peers_pid = self(),
     Port_listener_pid = port_listener:start(12345, Dl_pid, Peers_pid),
     link(Port_listener_pid),
-
-    {ok, Requester_sup_pid} = piece_requester_sup:start(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid), %% or link?
    
     spawn(fun() ->start_send(connect_to_tracker:make_list(Tracker_list, []), Peers_pid, Dl_pid, Length) end),
-    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid).
+    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, []).
 
 start_send([H|T], Peers_pid, Dl_pid, Length) ->
     process_flag(trap_exit, true),
     send_to_tracker([H|T], Peers_pid, Dl_pid, Length).
 send_to_tracker([],  _Peers_pid, _Dl_pid, _Length) ->
-    io:format("Empty list"),
-    exit(self(), kill);
+    io:format("~n~nLAST ONE IN LIST~n");
 send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
     Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
     link(Tracker_pid),
@@ -46,31 +44,34 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
 	    insert_new_peers(Peers, Peers_pid, Dl_pid);
 	{'EXIT', Tracker_pid, _Reason} ->
 	    io:format("connecting to next tracker in list from exit ~n"),
-	    send_to_tracker( T, Peers_pid, Dl_pid, Length)
-    after 2000 ->
+	    send_to_tracker(T, Peers_pid, Dl_pid, Length)
+    after 10000 ->
 	    io:format("connecting to next tracker in list ~n"),
-	    send_to_tracker( T, Peers_pid, Dl_pid, Length)
+	    send_to_tracker(T, Peers_pid, Dl_pid, Length)
     end.
-loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid) ->
+loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children) ->
     receive
 	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
-	    case piece_requester_sup:get_children_num(Requester_sup_pid) > 30 of
+	    case length(Children) > 30 of
 		true ->
 		    gen_tcp:close(Sock),
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid);
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 		_ ->
 		    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 								      Sock, Port, undefined]),
 		    mutex:received(Peer_storage_pid),
-		    piece_requester_sup:start_child(Requester_sup_pid, [Sock, Peer_id]),
+		    {ok, Pid} = piece_requester:start_link(Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid, Sock, Peer_id),
+		    link(Pid),
+		    New_children = insertChild({Pid, Sock}, Children),
 		    From ! {reply, ok},
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid)
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
 	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case piece_requester_sup:get_children_num(Requester_sup_pid) > 30 of
+	    case length(Children) > 30 of
 		true ->
-		     loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid);
+		    From ! {error, no_more_peers},
+		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 		_ ->
 		    case gen_tcp:connect(Host, Port, [binary, {active, false},
 						      {packet, 0}], 1000) of
@@ -81,26 +82,55 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requ
 			    ok = gen_tcp:send(Sock, Msg),
 			    io:format("Sent handshake to peer from tracker~n"),
 			    From ! {reply, ok, Sock},
-			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid);
+			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 			{error, Reason} ->
 			    io:format(Reason),
 			    From ! {error, Reason},
-			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid)
+			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children)
 		    end
 	    end;
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
-	    loop(peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid);		
+	    loop(peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);		
 	{'EXIT', Piece_storage_pid, Reason} ->
 	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without piece_storage"),
-	    loop(Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Requester_sup_pid);
+	    loop(Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Children);
 	{'EXIT', File_storage_pid, Reason} ->
 	    io:format("exit file_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without file_storage"),
-	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Requester_sup_pid)
+	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children);
+	{'EXIT', Child, _Reason} ->
+	    io:format("~n~nChild crashed!!!!!!!!!!!!!~n~n"),
+	    case mutex:request(Dl_storage_pid, put_back, [Child]) of
+		[] ->
+		    io:format("~n~nTHAT PEER DID NOT HAVE A PIECE ~n~n"),
+		    mutex:received(Dl_storage_pid);
+		{Index, {Hash, Peers_piece}} ->	
+		    io:format("~n~nTHAT PEER HAD A PIECE~n~n"),
+		    mutex:received(Dl_storage_pid),
+		    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers_piece]),
+		    mutex:received(Piece_storage_pid),
+		    io:format("~n~n~nmoved back that piece~n~n")
+	    end,
+	    New_children = removeChild(Child, Children, []),
+	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
     end.
+removeChild(_Child, [], New_children) ->
+    New_children;
+removeChild(Child, [{Pid, Socket}|T], New_children) ->
+    case Child of
+	Pid ->
+	    io:format("~n~nFOUND THAT PEER, REMOVING~n~n"),
+	    gen_tcp:close(Socket),
+	    removeChild(Child, T, New_children);
+	_  ->
+	    removeChild(Child, T, [{Pid, Socket}|New_children])
+    end.
+
+insertChild({Pid, Socket}, List) ->
+    [{Pid, Socket}|List].
 
 insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
@@ -109,7 +139,7 @@ insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
     ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], 
 			     Peers_pid, Dl_pid).
 
-handshake_all_peers([], _Info, _Peer_id, New_list, _Peers_pid, _Dl_pid) ->
+handshake_all_peers([], _Info, _Peer_id, _New_list, _Peers_pid, _Dl_pid) ->
     ok;
 handshake_all_peers([{H, Port}|T], Info, Peer_id, New_list, Peers_pid, 
 		    Dl_pid) ->
@@ -162,24 +192,19 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 		{ok, <<Reserved:64,
 		       Info_hash:160,
 		       Peer_id:160>>} ->
-		    io:format("GOT HANDSHAKE BACK~n~n~n"),
 		    Pid_h = handshake_handler:start(Dl_pid),
 		    Pid_h ! {handshake, self(), Reserved, <<Info_hash:160>>, 
 			     Peer_id},
 		    receive
 			{reply, Pid_h, ok} ->
-			    io:format("HANDSHAKE BACK FROM TRACKER PEER 
-                                              APPROVED~n~n~n"),
 			    insert_valid_peer(Peers_pid, Peer_id, Socket, 
-					      Host, Port),
-			    io:format("WAITING FOR MESSAGE FROM TRACKER
-                                         PEER~n~n~n");
+					      Host, Port);
 			{reply, Pid_h, drop_connection} ->
 			    gen_tcp:close(Socket)
 		    end
 	    end;
-	{ok, Data} ->	
-	    io:format("FYFAN DATA: " ++binary_to_list(Data) ++ "~n");
+	{ok, _Data} ->	
+	    ok;
 	{error, Reason} ->
 	    io:format("FYFAN REASON: ~w~n", [Reason])
     end.

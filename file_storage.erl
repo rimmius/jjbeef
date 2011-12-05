@@ -38,7 +38,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 	    From ! {reply, check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid)},
 	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
 	{request, compare_bitfield, [Peer_bitfield], From} ->
-	    From ! {reply, {ok, am_interested(Bitfield, Peer_bitfield, 0, length(Bitfield)-1)}},
+	    From ! {reply, am_interested(Bitfield, Peer_bitfield, 0, length(Bitfield)-1)},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
 	{request, have, [Index], From} ->
 	    From ! {reply, have(Index, Bitfield)},
@@ -113,7 +113,7 @@ am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
 	1 ->
 	    case Our_have of
 		0 ->
-		    [Acc|am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)];
+		    true;
 		1 ->
 		    am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)
 	    end;
@@ -121,7 +121,8 @@ am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
 	    am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)
     end;
 am_interested(_Our_bitfield, _Peer_bitfield, _Acc, _Max) ->
-    [].
+    false.
+	
 have(Index, Bitfield) ->
     {value, {Have, Index}} = lists:keysearch(Index, 2, Bitfield),
     case Have of

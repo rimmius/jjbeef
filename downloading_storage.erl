@@ -60,6 +60,9 @@ write(Tid, PieceIndex,Tuple,Pid) ->
 
 
 put_back(Tid, Pid)->
-   [Pid, {Index, {Hash, Peers}}] = 
-	ets:lookup(Tid, Pid),
-   {Index, {Hash, Peers}}.
+    case ets:lookup(Tid, Pid) of
+	[] ->
+	    [];
+	[{Pid, {Index, {Hash, Peers}}}] ->
+	    {Index, {Hash, Peers}}
+    end.
