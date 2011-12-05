@@ -11,7 +11,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/6, send_event/3]).
+-export([start_link/7, send_event/3, update_interest/3]).
 
 %% gen_fsm callbacks
 -export([init/1, am_choked_uninterested/2, am_choked_interested/2, am_unchoked_interested/2, am_unchoked_uninterested/2, state_name/3, handle_event/3,
@@ -19,7 +19,7 @@
 
 %% -define(SERVER, ?MODULE).
 
--record(state, {piece_storage, file_storage, download_storage, msg_handler, peer_id, bitfield}).
+-record(state, {parent, piece_storage, file_storage, download_storage, msg_handler, peer_id, interested_index}).
 
 %%%===================================================================
 %%% API
@@ -34,16 +34,16 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(Peer_mutex_pid, Piece_mutex_pid, 
+start_link(Parent, Peer_mutex_pid, Piece_mutex_pid, 
 	   File_storage_pid, Download_storage_pid, Socket, Peer_id) ->
     io:format("going to start fsm~n"),
-    gen_fsm:start_link(?MODULE, [Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id], []).
+    gen_fsm:start_link(?MODULE, [Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id], []).
 
-send_event(Pid, am_interested, Am_interested) ->
-    case Am_interested of
-	true -> gen_fsm:send_all_state_event(Pid, am_interested);
-	false -> gen_fsm:send_all_state_event(Pid, am_not_interested)
-    end;
+%%send_event(Pid, am_interested, Am_interested) ->
+%%    case Am_interested of
+%%	true -> gen_fsm:send_all_state_event(Pid, am_interested);
+%%	false -> gen_fsm:send_all_state_event(Pid, am_not_interested)
+%%    end;
 send_event(Pid, am_choked, Am_choked) ->
     case Am_choked of
 	1 -> gen_fsm:send_event(Pid, am_choked);
@@ -54,15 +54,15 @@ send_event(Pid, piece, {Is_complete, Index}) ->
 	1 -> gen_fsm:send_event(Pid, {piece_complete, Index});
 	0 -> gen_fsm:send_event(Pid, {piece_incomplete, Index})
     end;
-send_event(Pid, bitfield, Bitfield_in_list) ->
-    gen_fsm:send_all_state_event(Pid, {bitfield, Bitfield_in_list}).
+send_event(Pid, keep_alive, _) ->
+    gen_fsm:send_all_state_event(Pid, keep_alive).
 
+%% send_event(Pid, interested_index, List_of_interest) ->
+%%     gen_fsm:send_all_state_event(Pid, {interested_index, List_of_interest}).
 
-%% TODO! When other fsms got a complete pieces
-%% someting useful lol
-%%handle_event(have, StateName, State) ->
-%%    file_storage:compare_bitfield(File_storage, Bitfield_in_list),	
-%%    {next_state, StateName, State};
+update_interest(Pid, Index_in_list, Action) ->
+    gen_fsm:send_all_state_event(Pid, {update_interest, Action, Index_in_list}).
+
 
 
 %%%===================================================================
@@ -82,20 +82,20 @@ send_event(Pid, bitfield, Bitfield_in_list) ->
 %%                     {stop, StopReason}
 %% @end
 %%--------------------------------------------------------------------
-init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id]) ->
-    Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
-    link(Msg_handler_pid),
+init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id]) ->
+    Msg_handler_pid = message_handler:start_link(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     io:format("msg_handler started~n"),
     My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
     mutex:received(File_storage_pid),
     message_handler:send(Msg_handler_pid, bitfield, My_bitfield_in_list),
     io:format("my bitfiled sent~n"),
     io:format("init complete~n"),
-    {ok, am_choked_uninterested, #state{piece_storage = Piece_mutex_pid,
+    {ok, am_choked_uninterested, #state{parent = Parent,
+					piece_storage = Piece_mutex_pid,
 					msg_handler = Msg_handler_pid,
 					file_storage = File_storage_pid,
 					download_storage = Download_storage_pid,
-					peer_id = Peer_id}}.
+					peer_id = Peer_id}, 120000}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -114,14 +114,47 @@ init([Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, S
 %%--------------------------------------------------------------------
 %% state 1
 am_choked_uninterested(am_unchoked, State) ->
-    {next_state, am_unchoked_uninterested, State};
+    {next_state, am_unchoked_uninterested, State, 120000};
 am_choked_uninterested(am_choked, State) ->
-    {next_state, am_choked_uninterested, State}.
-%% and keep_alive
+    {next_state, am_choked_uninterested, State, 120000};
+am_choked_uninterested(timeout, State) ->
+    message_handler:send(State#state.msg_handler, keep_alive, whatever),
+    {next_state, am_choked_uninterested, State, 120000}.
 
 %% state 2
 am_choked_interested(am_unchoked, State) ->
-    io:format("~n~n~n~w~nPIECE_STORAGE_PID~n", [State#state.piece_storage]),
+    {next_state, am_unchoked_interested, State, 0};
+am_choked_interested(am_choked, State) ->
+    {next_state, am_choked_interested, State, 120000};
+am_choked_interested(timeout, State) ->
+    message_handler:send(State#state.msg_handler, keep_alive, whatever),
+    {next_state, am_choked_interested, State, 120000}.
+    
+%% state 3
+am_unchoked_interested(am_choked, State) ->
+    {next_state, am_choked_interested, State, 120000};
+am_unchoked_interested(am_unchoked, State) ->
+	%% problem domain
+	%% without timeout
+    {next_state, am_unchoked_interested, State};
+am_unchoked_interested({piece_complete, Index}, State) ->
+    peers:notice_have(State#state.parent, Index),
+    {next_state, am_unchoked_interested, State, 0};
+am_unchoked_interested({piece_incomplete, Index}, State) ->
+    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
+    mutex:received(State#state.file_storage),
+    
+    case Chunk_result of
+	{Begin, Length} ->
+	    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
+	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
+	    %% without timeout, wait for complete/incomplete
+	    {next_state, am_unchoked_interested, State};
+	access_denied ->
+	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
+	    {next_state, am_unchoked_interested, State, 0}
+    end;
+am_unchoked_interested(timeout, State) ->
     Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),
     mutex:received(State#state.piece_storage),
     
@@ -133,74 +166,33 @@ am_choked_interested(am_unchoked, State) ->
 	    mutex:received(State#state.download_storage),	    
 	    
 	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
-	    case mutex:request(State#state.file_storage, what_chunk, [Index]) of
-		access_denied ->
-		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
-		    mutex:received(State#state.file_storage),
-		    {next_state, am_unchoked_uninterested, State};
+	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
+	    mutex:received(State#state.file_storage),
+
+	    case Chunk_result of
 		{Begin, Length} ->
-		    mutex:received(State#state.file_storage),
 		    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
-		    {next_state, am_unchoked_interested, State}
-	    end;
-	{hold} -> 
-	    {next_state, am_unchoked_uninterested, State} %%, 10000} 
-		%% timeout
-    end;
-am_choked_interested(am_choked, State) ->
-	{next_state, am_choked_interested, State}.
-
-%% and keep_alive
-    
-%% state 3
-am_unchoked_interested(am_choked, State) ->
-    {next_state, am_choked_interested, State};
-am_unchoked_interested(am_unchoked, State) ->
-    {next_state, am_unchoked_interested, State};
-am_unchoked_interested({piece_complete, _Old_Index}, State) ->
-    Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),    
-    mutex:received(State#state.piece_storage),
-
-    case Reply of
-	{ok, Index, Data} -> 
-	    %% write the piece into dl_sto and remove it from piece_sto
-	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
-	    mutex:received(State#state.download_storage),
-	    case mutex:request(State#state.file_storage, what_chunk, [Index]) of
+		    %% without timeout, wait for complete/incomplete
+		    {next_state, am_unchoked_interested, State};
 		access_denied ->
 		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
-		    mutex:received(State#state.file_storage),
-		    {next_state, am_unchoked_uninterested, State};
-		{Begin, Length} ->
-		    mutex:received(State#state.file_storage),
-		    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
-		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
-		    {next_state, am_unchoked_interested, State}
-	    end;
+		    {next_state, am_unchoked_interested, State, 0}
+	    end;		
 	{hold} -> 
-	    {next_state, am_unchoked_uninterested, State}
-    end;
-am_unchoked_interested({piece_incomplete, Index}, State) ->
-    case mutex:request(State#state.file_storage, what_chunk, [Index]) of
-	access_denied ->
-	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
-	    mutex:received(State#state.file_storage),
-	    {next_state, am_unchoked_uninterested, State};
-	{Begin, Length} ->
-	    mutex:received(State#state.file_storage),
-	    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
-	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
-	    {next_state, am_unchoked_interested, State}
+	    {next_state, am_unchoked_interested, State, 20000}
     end.
-%% and keep_alive
+%% and/or keep_alive
+%% or timeout for pending requests
 
 %% state 4
 am_unchoked_uninterested(am_choked, State) ->
-    {next_state, am_choked_uninterested, State};
+    {next_state, am_choked_uninterested, State, 120000};
 am_unchoked_uninterested(am_unchoked, State) ->
-    {next_state, am_unchoked_uninterested, State}.
-%% and keep_alive
+    {next_state, am_unchoked_uninterested, State, 120000};
+am_unchoked_uninterested(timeout, State) ->
+    message_handler:send(State#state.msg_handler, keep_alive, whatever),
+    {next_state, am_unchoked_uninterested, State, 120000}.
     
 %%--------------------------------------------------------------------
 %% @private
@@ -237,31 +229,71 @@ state_name(_Event, _From, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_event({bitfield, Bitfield_in_list}, StateName, State) ->
+%% handle_event({interested_index, List_of_interest}, StateName, State) ->
+%%     %% all states
+%%     Am_interested = case List_of_interest of
+%% 			[] -> false;
+%% 			_ -> true
+%% 		    end,
+
+%%     NewStateName = case {StateName, Am_interested} of
+%% 		       {am_choked_uninterested, true} -> am_choked_interested;
+%% 		       {am_choked_interested, false} -> am_choked_uninterested;
+%% 		       {am_unchoked_interested, false} -> am_unchoked_uninterested;
+%% 		       {am_unchoked_uninterested, true} -> am_unchoked_interested;
+%% 		       {_, _} -> StateName
+%% 		   end,
+
+%%     message_handler:send(State#state.msg_handler, am_interested, Am_interested),
+%%     {next_state, NewStateName, State#state{interested_index = List_of_interest}};
+handle_event({update_interest, Index_in_list, Action}, StateName, State) ->
     %% all states
-    {next_state, StateName, State#state{bitfield = Bitfield_in_list}};
-handle_event(am_interested, am_choked_uninterested, State) ->
-    %% state 1
-    message_handler:send(State#state.msg_handler, am_interested, true),
-    {next_state, am_choked_interested, State};
-handle_event(am_interested, am_unchoked_uninterested, State) ->
-    %% state 4
-    message_handler:send(State#state.msg_handler, am_interested, true),
-    {next_state, am_unchoked_interested, State};
-handle_event(am_interested, StateName, State) ->
-    %% state 2 and 3
-    {next_state, StateName, State};
-handle_event(am_not_interested, am_choked_interested, State) ->
-    %% state 2
-    message_handler:send(State#state.msg_handler, am_interested, false),
-    {next_state, am_choked_interested, State};
-handle_event(am_not_interested, am_unchoked_interested, State) ->
-    %% state 3
-    message_handler:send(State#state.msg_handler, am_interested, false),
-    {next_state, am_unchoked_interested, State};
-handle_event(am_not_interested, StateName, State) ->
-    %% state 1 and 4
-    {next_state, StateName, State}.
+    New_list_of_interest =  case Action of 
+				add -> State#state.interested_index ++ Index_in_list;
+				remove ->  State#state.interested_index -- Index_in_list
+			    end,
+   
+    Am_interested = case New_list_of_interest of
+			[] ->  false;
+			_ -> true
+		    end,
+    
+    NewStateName = case {StateName, Am_interested} of
+		       {am_choked_uninterested, true} -> am_choked_interested;
+		       {am_choked_interested, false} -> am_choked_uninterested;
+		       {am_unchoked_interested, false} -> am_unchoked_uninterested;
+		       {am_unchoked_uninterested, true} -> am_unchoked_interested;
+		       {_, _} -> StateName
+		   end,
+    
+    message_handler:send(State#state.msg_handler, am_interested, Am_interested),
+    {next_state, NewStateName, State#state{interested_index = New_list_of_interest}};
+handle_event(keep_alive, StateName, State) ->
+    {next_state, StateName, State, 120000}.
+
+%% handle_event(am_interested, am_choked_uninterested, State) ->
+%%     %% state 1
+%%     message_handler:send(State#state.msg_handler, am_interested, true),
+%%     {next_state, am_choked_interested, State};
+%% handle_event(am_interested, am_unchoked_uninterested, State) ->
+%%     %% state 4
+%%     message_handler:send(State#state.msg_handler, am_interested, true),
+%%     {next_state, am_unchoked_interested, State};
+%% handle_event(am_interested, StateName, State) ->
+%%     %% state 2 and 3
+%%     {next_state, StateName, State};
+%% handle_event(am_not_interested, am_choked_interested, State) ->
+%%     %% state 2
+%%     message_handler:send(State#state.msg_handler, am_interested, false),
+%%     {next_state, am_choked_interested, State};
+%% handle_event(am_not_interested, am_unchoked_interested, State) ->
+%%     %% state 3
+%%     message_handler:send(State#state.msg_handler, am_interested, false),
+%%     {next_state, am_unchoked_interested, State};
+%% handle_event(am_not_interested, StateName, State) ->
+%%     %% state 1 and 4
+%%     {next_state, StateName, State}.
+
 
 
 %%--------------------------------------------------------------------
