@@ -2,7 +2,7 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/5, insert_new_peers/3, insert_valid_peer/3, accept_connections/1]).
+-export([start/5, insert_new_peers/3, insert_valid_peer/3, accept_connections/1, notice_have/2]).
 -export([init/6]).
 
 %%Starts the peers module and hands back the pid
@@ -52,7 +52,7 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
 loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children) ->
     receive
 	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
-	    case length(Children) > 30 of
+	    case length(Children) > 50 of
 		true ->
 		    gen_tcp:close(Sock),
 		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
@@ -68,7 +68,7 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Chil
 		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
 	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case length(Children) > 30 of
+	    case length(Children) > 50 of
 		true ->
 		    From ! {error, no_more_peers},
 		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
@@ -91,6 +91,9 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Chil
 	    end;
 	{current_connections, From} ->
 	    From ! {reply, length(Children)},
+	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+	{update_interest, From, Index} ->
+	    From ! {reply, update_interest(Children, Index)},
 	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
@@ -229,5 +232,19 @@ accept_connections(Peers_pid) ->
     Peers_pid ! {current_connections, self()},
     receive
 	{reply, Peers} ->
-	    Peers < 30
+	    Peers < 50
+    end.
+
+update_interest([], _Index) ->
+    ok;
+update_interest([Child | Children], Index) ->
+    %% getting result? not sure
+    spawn(piece_requester, update_interest, [Child, Index]),
+    update_interest(Children, Index).
+
+notice_have(Pid, Index) ->
+    Pid ! {update_interest, self(), Index},
+    receive
+	{reply, Reply} ->
+	    Reply
     end.
