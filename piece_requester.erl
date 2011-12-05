@@ -61,7 +61,7 @@ send_event(Pid, keep_alive, _) ->
 %%     gen_fsm:send_all_state_event(Pid, {interested_index, List_of_interest}).
 
 update_interest(Pid, Index_in_list, Action) ->
-    gen_fsm:send_all_state_event(Pid, {update_interest, Action, Index_in_list}).
+    gen_fsm:send_all_state_event(Pid, {update_interest, Index_in_list, Action}).
 
 
 
