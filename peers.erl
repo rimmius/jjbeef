@@ -2,7 +2,7 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/5, insert_new_peers/3, insert_valid_peer/3]).
+-export([start/5, insert_new_peers/3, insert_valid_peer/3, accept_connections/1]).
 -export([init/6]).
 
 %%Starts the peers module and hands back the pid
@@ -89,6 +89,9 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Chil
 			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children)
 		    end
 	    end;
+	{current_connections, From} ->
+	    From ! {reply, length(Children)},
+	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
@@ -222,3 +225,9 @@ insert_valid_peer(Peers_pid, Peer_id, Sock) ->
     %% io:format("Received handshake back~n"),
     %% message_handler:start(Dl_pid, Socket),
     %% io:format("~n").
+accept_connections(Peers_pid) ->
+    Peers_pid ! {current_connections, self()},
+    receive
+	{reply, Peers} ->
+	    Peers < 30
+    end.

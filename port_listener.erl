@@ -20,8 +20,14 @@ listen(Port, Dl_pid, Parent) ->
 
 accept(LSocket, Dl_pid, Parent) ->
     {ok, Socket} = gen_tcp:accept(LSocket),
-    spawn(fun() -> recv(Socket, Dl_pid, Parent) end),
-    accept(LSocket, Dl_pid, Parent).
+    case peers:accept_connections(Parent) of
+	true ->
+	    spawn(fun() -> recv(Socket, Dl_pid, Parent) end),
+	    accept(LSocket, Dl_pid, Parent);
+	_  ->
+	    gen_tcp:close(Socket),
+	    accept(LSocket, Dl_pid, Parent)
+    end.
 
 recv(Socket, Dl_pid, Parent) ->
     case gen_tcp:recv(Socket, 20) of
