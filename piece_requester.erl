@@ -19,7 +19,7 @@
 
 %% -define(SERVER, ?MODULE).
 
--record(state, {parent, piece_storage, file_storage, download_storage, msg_handler, peer_id, interested_index}).
+-record(state, {parent, piece_storage, file_storage, download_storage, msg_handler, peer_id, interested_index = []}).
 
 %%%===================================================================
 %%% API
