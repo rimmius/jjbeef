@@ -42,7 +42,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    message_handler:done(Parent);
 	%% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,1>>} ->
-	    case gen_tcp:recv(Socket, 1, 120000) of
+	    case gen_tcp:recv(Socket, 1) of
 		{ok, <<0>>} ->
 		    %%choke
 		    io:format("~n*****~w*****Choke len=1, id=0~n", [self()]),
@@ -69,7 +69,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,5>>} ->
-	    case gen_tcp:recv(Socket, 5, 120000) of
+	    case gen_tcp:recv(Socket, 5) of
 		{ok, <<4, Piece_index:32>>} ->
 		    %%have
 		    message_reader:read_msg(Msg_reader_pid, have, [Piece_index]),
@@ -80,7 +80,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,13>>} ->
-	    case gen_tcp:recv(Socket, 13, 120000) of
+	    case gen_tcp:recv(Socket, 13) of
 		{ok, <<6, Index:32, Begin:32, Length:32>>} ->
 		    %%request
 		    io:format("~n*****~w*****Request len=13, id=6, index=~w, begin=~w, length=~w~n", 
@@ -99,7 +99,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    end;
 				  %% do_recv(Socket, Pid_message_reader);
 	{ok, <<0,0,0,3>>} ->
-	    case gen_tcp:recv(Socket, 3, 120000) of
+	    case gen_tcp:recv(Socket, 3) of
 		{ok, <<9, Listen_port:16>>} ->
 		    %%port
 		    io:format("~n*****~w*****Port len=3, id=9, listen_port=~w ~n", 
@@ -114,7 +114,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	{ok, <<Len:32/integer-big>>} ->
 	    Bitfield_len = Len*8-8,
 	    Block_len = Len*8-72,
-	    case gen_tcp:recv(Socket, Len, 120000) of
+	    case gen_tcp:recv(Socket, Len) of
 		{ok, <<5, Bitfield:Bitfield_len>>} ->
 		    %%bitfield
 		    io:format("~n*****~w*****bitfield len=1+~w, id=5, bitfield=~w ~n", 
