@@ -140,6 +140,7 @@ am_unchoked_interested(am_unchoked, State) ->
     {next_state, am_unchoked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
     peers:notice_have(State#state.parent, Index),
+    message_handler:send(State#state.msg_handler, have, Index),
     {next_state, am_unchoked_interested, State, 0};
 am_unchoked_interested({piece_incomplete, Index}, State) ->
     Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
