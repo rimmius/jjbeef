@@ -252,7 +252,10 @@ handle_event({update_interest, Index_in_list, Action}, StateName, State) ->
     %% all states
     New_list_of_interest =  case Action of 
 				add -> State#state.interested_index ++ Index_in_list;
-				remove ->  State#state.interested_index -- Index_in_list
+				remove ->  
+				    [Index] = Index_in_list,				    
+				    message_handler:send(State#state.msg_handler, have, Index),
+				    State#state.interested_index -- Index_in_list
 			    end,
    
     Am_interested = case New_list_of_interest of
