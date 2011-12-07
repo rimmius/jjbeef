@@ -10,115 +10,120 @@ start(List) ->
     spawn(?MODULE, init, [List]).
 
 init(List) ->
-    initiate_table(List),
-    loop(piece_table, length(List)-1).
+    Tid = initiate_table(List),
+    loop(Tid, length(List) - 1).
 
 
 initiate_table(List) ->
-    ets:new(piece_table,[named_table, ordered_set]),
-    initiate_table(piece_table, List, 0).
-initiate_table(piece_table, [H|T], Index) ->
-    ets:insert(piece_table, {Index, {H, []}}),
-    initiate_table(piece_table, T, Index + 1);
-initiate_table(piece_table, [], _Index) ->
-    piece_table.
+    Tid = ets:new(db, [ordered_set]),
+    initiate_table(Tid, List, 0).
+initiate_table(Tid, [H|T], Index) ->
+    ets:insert(Tid, {Index, {H, []}}),
+    initiate_table(Tid, T, Index + 1);
+initiate_table(Tid, [], _Index) ->
+    Tid.
 
-loop(piece_table, Nr_of_pieces)->
+loop(Tid, Nr_of_pieces)->
     receive
 	{request, Function, Args, From} ->
 	    case Function of
 		insert_bitfield ->
 		    [PeerId, [H|T]] = Args,
-		    Reply = insert_bitfield(piece_table, PeerId, [H|T]);
+		    Reply = insert_bitfield(Tid, PeerId, [H|T]);
 		read_piece ->
 		    [Index] = Args,
-		    Reply = read_piece(piece_table, Index);
+		    Reply = read_piece(Tid, Index);
 		update_bitfield ->
 		    [PeerId, PieceIndex] = Args,
-		    Reply = update_bitfield(piece_table, PeerId, PieceIndex);
+		    Reply = update_bitfield(Tid, PeerId, PieceIndex);
 		get_piece_hash ->
 		    [Index] = Args,
-		    Reply = get_piece_hash(piece_table, Index);
+		    Reply = get_piece_hash(Tid, Index);
 		delete_peer ->
 		    [PeerId] = Args,
-		    Reply = delete_peer(piece_table,PeerId);
+		    Reply = delete_peer(Tid,PeerId);
 		delete_piece ->
 		    [Index] = Args,
-		    Reply = delete_piece(piece_table, Index);
+		    Reply = delete_piece(Tid, Index);
 		put_piece_back ->
-		    [Index,Hash,Peers]=Args,
-		    Reply = put_piece_back(piece_table,Index,Hash,Peers);
+		    [Index, Hash, Peers]=Args,
+		    Reply = put_piece_back(Tid, Index, Hash, Peers);
 		get_rarest ->
-		    Reply = get_rarest(piece_table, 0, Nr_of_pieces, []);
+		    Reply = get_rarest(Tid, 0, Nr_of_pieces, []);
 		get_rarest_index ->
 		    [PeerId] = Args,
-		    Reply = get_rarest_index(piece_table,PeerId,Nr_of_pieces),
+		    Reply = get_rarest_index(Tid, PeerId, Nr_of_pieces),
 		    case Reply of
 			{ok, Index, _Tuple} ->
-			    delete_piece(piece_table, Index),
+			    delete_piece(Tid, Index),
 			    Reply;
 			{hold} ->
 			    Reply
 		    end		   
 	    end,
 	    From ! {reply, Reply},
-	    loop(piece_table, Nr_of_pieces);
+	    loop(Tid, Nr_of_pieces);
+	{lookup, Data, From} -> Result = ets:lookup(Tid, Data),
+				From ! {reply, Result},
+				loop(Tid, Nr_of_pieces);
 	stop -> ok;
 	_Anything  ->
 	    loop(piece_table, Nr_of_pieces)
     end.
 
-delete_piece(piece_table, Index) ->
-    ets:delete(piece_table, Index).
+delete_piece(Tid, Index) ->
+    ets:delete(Tid, Index).
 
-put_piece_back(piece_table,Index,Hash,Peers)->
-    ets:insert(piece_table,{Index,{Hash,Peers}}).
+put_piece_back(Tid, Index, Hash, Peers)->
+    ets:insert(Tid, {Index, {Hash, Peers}}).
 
-get_rarest_index(piece_table,PeerId,Nr_of_pieces)->
-    RarestList = get_rarest(piece_table,0,Nr_of_pieces,[]),
-    get_rarest_index_inner(piece_table,PeerId,RarestList).
-get_rarest_index_inner(piece_table,PeerId,[H|T])->
-    {Index,[P|Peers]}=H,
-    Reply = compare(PeerId,[P|Peers],Index),
+get_rarest_index(Tid, PeerId, Nr_of_pieces)->
+    RarestList = get_rarest(Tid, 0, Nr_of_pieces, []),
+    get_rarest_index_inner(Tid, PeerId, RarestList).
+get_rarest_index_inner(Tid, PeerId, [H|T])->
+    {Index, [P|Peers]} = H,
+    Reply = compare(PeerId, [P|Peers], Index),
     case Reply of
-	{ok,Index}->
-	    Tuple = read_piece(piece_table,Index),
-	    {ok,Index,Tuple};
+	{ok, Index}->
+	    Tuple = read_piece(Tid, Index),
+	    {ok, Index, Tuple};
 	{hold} ->
-	    get_rarest_index_inner(piece_table,PeerId,T)
+	    get_rarest_index_inner(Tid, PeerId,T)
     end;
-get_rarest_index_inner(piece_table,_PeerId,[])->
+get_rarest_index_inner(_Tid, _PeerId, [])->
     {hold}.
 
-compare(PeerId,[P|Peers],Index)->
+compare(PeerId, [P|Peers], Index)->
     case PeerId == P of
 	true ->
-	    {ok,Index};
+	    {ok, Index};
 	false ->
-	    compare(PeerId,Peers,Index)
+	    compare(PeerId, Peers, Index)
     end;
-compare(_PeerId,[],_Index) ->
+compare(_PeerId, [], _Index) ->
     {hold}.
 
-
-get_rarest(piece_table, Acc, Max, Rarest_list) when Acc =< Max ->
-    case ets:lookup(piece_table, Acc) of
+get_rarest(Tid, Acc, Max, Rarest_list) when Acc =< Max ->
+    case ets:lookup(Tid, Acc) of
 	[] ->
-	    get_rarest(piece_table, Acc+1, Max, Rarest_list);
+	    get_rarest(Tid, Acc + 1, Max, Rarest_list);
 	[{Index, {_Hash, Peers}}] ->
 	    case length(Peers) of
 		0 ->
-		    get_rarest(piece_table, Acc+1, Max, Rarest_list);
+		    get_rarest(Tid, Acc + 1, Max, Rarest_list);
 		_Nr  ->
-		    get_rarest(piece_table, Acc+1, Max, place_rarest(Index, Peers, Rarest_list, []))
+		    get_rarest(Tid, Acc + 1, Max, 
+			       place_rarest(Index, Peers, Rarest_list, []))
 	    end
     end;
-get_rarest(piece_table, _Acc, _Max, Rarest_list) ->
+get_rarest(_Tid, _Acc, _Max, Rarest_list) ->
     Rarest_list.
 
 place_rarest(Index, Peers, [], New_list) ->
     New_list ++ [{Index, Peers}];
-place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /= 0 ->
+place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) 
+  when length(Peers) /= 0 ->
+
     case length(Peers) < length(Peers2) of
 	true ->
 	    New_list ++ [{Index,Peers}] ++ [{Index2, Peers2}|T];
@@ -127,58 +132,59 @@ place_rarest(Index, Peers, [{Index2, Peers2}|T], New_list) when length(Peers) /=
     end;
 place_rarest(_Index, _Peers, [H|T], _New_list) ->
     [H|T].
+
 %% insert a new peer that has one of the pieces we want into the table
-insert_bitfield(piece_table, PeerId, [H|T]) ->
+insert_bitfield(Tid, PeerId, [H|T]) ->
     Has = [X || {1, X} <- [H|T]],
-    insert_to_table(piece_table, Has, PeerId).
+    insert_to_table(Tid, Has, PeerId).
 
 %% inner function of insert_bitfield
-insert_to_table(piece_table, [Has|T], PeerId) ->
-    Result = ets:lookup(piece_table,Has),
+insert_to_table(Tid, [Has|T], PeerId) ->
+    Result = ets:lookup(Tid, Has),
     case Result of 
 	[]->
-	    insert_to_table(piece_table,T,PeerId);
+	    insert_to_table(Tid, T, PeerId);
 	_found ->
 	    [{Index, {Hash, Peers}}] = Result,
-	    ets:insert(piece_table, {Index, {Hash, [PeerId|Peers]}}),
-	    insert_to_table(piece_table, T, PeerId)
+	    ets:insert(Tid, {Index, {Hash, [PeerId|Peers]}}),
+	    insert_to_table(Tid, T, PeerId)
      end;
-insert_to_table(piece_table, [], _PeerId) ->
+insert_to_table(_Tid, [], _PeerId) ->
      has_inserted.
 
 %% update piece storage when a have message is received
-update_bitfield(piece_table, PeerId, PieceIndex) ->
-    Result = ets:lookup(piece_table,PieceIndex),
+update_bitfield(Tid, PeerId, PieceIndex) ->
+    Result = ets:lookup(Tid,PieceIndex),
     case Result of
 	[]->
 	    non_existent;
 	_found ->
 	    [{PieceIndex, {Hash, Peers}}] = Result,
-	    ets:insert(piece_table, {PieceIndex, {Hash, [PeerId|Peers]}}),
+	    ets:insert(Tid, {PieceIndex, {Hash, [PeerId|Peers]}}),
 	    has_updated
     end.
     
 %% read the list of peers that has a certain piece by 
 %% providing the piece index. 
-read_piece(piece_table, Index) ->
-    [Content] = ets:lookup(piece_table, Index),
+read_piece(Tid, Index) ->
+    [Content] = ets:lookup(Tid, Index),
     Content.
 
 %% get the piecehash of a piece by providing the piece index
-get_piece_hash(piece_table, Index) ->
-    [{Index, {Piecehash, _Peers}}] = ets:lookup(piece_table, Index),
+get_piece_hash(Tid, Index) ->
+    [{Index, {Piecehash, _Peers}}] = ets:lookup(Tid, Index),
     Piecehash.
 
-delete_peer(piece_table,PeerId)->
-    delete_peer(piece_table,PeerId,0).
-delete_peer(piece_table,PeerId,Index) ->
-    io:format("last: ~w~n",[ets:last(piece_table)]),
-    case Index > ets:last(piece_table) of
+delete_peer(Tid, PeerId)->
+    delete_peer(Tid, PeerId, 0).
+delete_peer(Tid, PeerId, Index) ->
+    io:format("last: ~w~n",[ets:last(Tid)]),
+    case Index > ets:last(Tid) of
 	true ->
 	    has_deleted;
 	false ->
-	    [{Index,{Piecehash,Peers}}] = ets:lookup(piece_table,Index),
-	    ets:insert(piece_table, {Index, {Piecehash, Peers--[PeerId]}}),
-	    delete_peer(piece_table,PeerId,Index+1)
+	    [{Index, {Piecehash, Peers}}] = ets:lookup(Tid, Index),
+	    ets:insert(Tid, {Index, {Piecehash, Peers -- [PeerId]}}),
+	    delete_peer(Tid, PeerId, Index + 1)
     end.
 
