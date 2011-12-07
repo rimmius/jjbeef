@@ -28,85 +28,88 @@ start() ->
     spawn(?MODULE, init, []).
  
 init() ->
-    ets:new(peer_table, [named_table, {keypos, #peer.peerid}]),
-    loop(peer_table).
+    Tid = ets:new(db, [{keypos, #peer.peerid}]),
+    loop(Tid).
 
-loop(peer_table) ->
+loop(Tid) ->
     receive
-	{request, Function, Args, From}->
+	{request, Function, Args, From} ->
 	    case Function of
 		insert_new_peer ->
 		    [Ip, PeerId, Socket, Port, Request] = Args,
-		    Reply = insert_new_peer(Ip, PeerId, Socket,
+		    Reply = insert_new_peer(Tid, Ip, PeerId, Socket,
 					    Port, Request);
 		update_peer ->
 		    [PeerId, Field, Value] = Args,
-		    Reply = update_peer(PeerId, Field, Value);
+		    Reply = update_peer(Tid, PeerId, Field, Value);
 		delete_peer ->
 		    [PeerId] = Args,
-		    Reply = delete_peer(peer_table, PeerId);
+		    Reply = delete_peer(Tid, PeerId);
 		read_field ->
 		    [PeerId, Field] = Args,
-		    Reply = read_field(peer_table, PeerId, Field)
+		    Reply = read_field(Tid, PeerId, Field)
 	    end,
 	    From ! {reply, Reply},
-	    loop(peer_table);
+	    loop(Tid);
+	{lookup, Data, From} -> Result = ets:lookup(Tid, Data),
+				From ! {reply, Result},
+				loop(Tid);
 	stop -> ok
     end.
 
 %% insert peer for the first time.
-insert_new_peer(Ip, PeerId, Socket, Port, Request) -> 
-    ets:insert(peer_table, #peer{peerid = PeerId, interested = 0, choke = 1,
+insert_new_peer(Tid, Ip, PeerId, Socket, Port, Request) -> 
+    ets:insert(Tid, #peer{peerid = PeerId, interested = 0, choke = 1,
 			  ip = Ip, socket = Socket, port = Port,
 			  request = Request}).
 
 %% update certain peer fields
-update_peer(PeerId, Field, Value) ->
+update_peer(Tid, PeerId, Field, Value) ->
     case Field of
 	interested -> 
 	    [#peer{peerid = PeerId, interested = _Int, choke = Ch,
 		   ip = Ip, socket = Soc, port = Port, request = Req}] =
-		  ets:lookup(peer_table, PeerId),
-	    ets:insert(peer_table, #peer{peerid = PeerId, interested = Value,
+		  ets:lookup(Tid, PeerId),
+	    ets:insert(Tid, #peer{peerid = PeerId, interested = Value,
 					 choke = Ch, ip = Ip, socket = Soc,
 					port = Port, request = Req});
 	choke -> 
 	    [#peer{peerid = PeerId, interested = Int, choke = _Ch,
 		   ip = Ip, socket = Soc, port = Port, request = Req}] =
-		  ets:lookup(peer_table, PeerId),
-	    ets:insert(peer_table, #peer{peerid = PeerId, interested = Int,
+		  ets:lookup(Tid, PeerId),
+	    ets:insert(Tid, #peer{peerid = PeerId, interested = Int,
 					 choke = Value, ip = Ip, socket = Soc,
 					port = Port, request = Req});
 	socket -> 
 	    [#peer{peerid = PeerId, interested = Int, choke = Ch,
 		   ip = Ip, socket = _Soc, port = Port, request = Req}] =
-		  ets:lookup(peer_table, PeerId),
-	    ets:insert(peer_table, #peer{peerid = PeerId, interested = Int,
+		  ets:lookup(Tid, PeerId),
+	    ets:insert(Tid, #peer{peerid = PeerId, interested = Int,
 					 choke = Ch, ip = Ip, socket = Value,
 					port = Port, request = Req});
 	port -> 
 	    [#peer{peerid = PeerId, interested = Int, choke = Ch,
 		   ip = Ip, socket = Soc, port = _Port, request = Req}] =
-		  ets:lookup(peer_table, PeerId),
-	    ets:insert(peer_table, #peer{peerid = PeerId, interested = Int,
+		  ets:lookup(Tid, PeerId),
+	    ets:insert(Tid, #peer{peerid = PeerId, interested = Int,
 					 choke = Ch, ip = Ip, socket = Soc,
 					port = Value, request = Req});
 	request -> 
 	    [#peer{peerid = PeerId, interested = Int, choke = Ch,
 		   ip = Ip, socket = Soc, port = Port, request = _Req}] =
-		  ets:lookup(peer_table, PeerId),
-	    ets:insert(peer_table, #peer{peerid = PeerId, interested = Int,
+		  ets:lookup(Tid, PeerId),
+	    ets:insert(Tid, #peer{peerid = PeerId, interested = Int,
 					 choke = Ch, ip = Ip, socket = Soc,
 					port = Port, request = Value})
     end.
 
 %% delete a peer 
-delete_peer(peer_table, PeerId)->
-    ets:delete(peer_table, PeerId).
+delete_peer(Tid, PeerId)->
+    ets:delete(Tid, PeerId).
 
 %% read certain peer fields and return their value
-read_field(peer_table, PeerId, Field) ->
-    [Peer] = ets:lookup(peer_table, PeerId),
+read_field(Tid, PeerId, Field) ->
+    [Peer] = ets:lookup(Tid, PeerId),
     case Field of
 	interested -> Peer#peer.interested;
 	choke -> Peer#peer.choke;
