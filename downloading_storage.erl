@@ -23,7 +23,10 @@ loop(Tid) ->
 		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
 		put_back ->
 		    [Pid] = Args,
-		    From ! {reply, put_back(Tid, Pid)}
+		    From ! {reply, put_back(Tid, Pid)};
+		compare_hash ->
+		    [FileIndex,FileHash]= Args,
+		    From!{reply,compare_hash(Tid,FileIndex,FileHash)}
 		%% delete_peer ->
 		%%     [PieceIndex, PeerId] = Args,
 		%%     Reply = delete_peer(Tid, PieceIndex, PeerId),
@@ -66,3 +69,24 @@ put_back(Tid, Pid)->
 	[{Pid, {Index, {Hash, Peers}}}] ->
 	    {Index, {Hash, Peers}}
     end.
+
+compare_hash(Tid,FileIndex,FileHash)->
+    First_key = ets:first(Tid),
+    compare_hash(Tid,FileIndex,FileHash,First_key).
+compare_hash(Tid,FileIndex,FileHash,Key)->
+    {_Pid, {Index,{Hash,_Peers}}}= ets:lookup(Key),
+    case FileIndex == Index of
+	true ->
+	    FileHash == Hash;
+	false->
+	     Next_key = ets:next(Tid,Key),
+	    case Next_key of
+		'$end_of_table' ->
+		    end_of_table;
+		_found ->
+		    compare_hash(Tid,FileIndex,FileHash,Next_key)
+	
+	    end
+     end.
+    
+	    
