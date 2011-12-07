@@ -10,7 +10,7 @@ start(Dl_pid, Peers_pid, Length) ->
 init(Dl_pid, Peers_pid, Length) ->
     Info_sha = sha:shaurl(download_manager:get_info_clean(Dl_pid)),
     My_id = download_manager:get_my_id(Dl_pid),
-    loop(Info_sha, 10000, My_id, none, "12345", Length, Peers_pid, Dl_pid).
+    loop(Info_sha, 10000, My_id, none, "6881", Length, Peers_pid, Dl_pid).
 loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid) ->
     receive
 	{connect, From, H} ->

@@ -64,7 +64,8 @@ loop(Peers_pid, Info_hash, Info_clean, My_id) ->
 	    From ! {reply, Info_hash},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id);
 	{'EXIT', Peers_pid, Reason} ->
-	    io:format("Peerspid crashed!~w~n", Reason)
+	    io:format("Peerspid crashed!~w~n", [Reason]),
+	    exit(self(), kill)
     end.
 
 get_torrent_data(File) ->
@@ -84,7 +85,9 @@ get_announce_list({dict, Dict}) ->
 	 {ok,{_, List}} ->
 	     List;
 	 error ->
-	     []
+	     {ok, Link} = dict:find(<<"announce">>, Dict),
+	     io:format("~w~n", [Link]),
+	     [{ok, binary_to_list(Link)}]
      end.
 
 get_pieces({dict, Dict}) ->
@@ -102,20 +105,29 @@ get_length_and_name({dict, Dict}) ->
     case dict:find(<<"files">>, Info_dict) of
 	{ok, {_,Files_dict}} ->
 	    {get_length(Files_dict, 0), 
-	     ["multiple_files_not_supported_yet.error"]};
+	     get_names(Files_dict), get_lengths_list(Files_dict)};
 	error ->
 	    Name_of_files = dict:fetch(<<"name">>, Info_dict),
-	    {dict:fetch(<<"length">>, Info_dict), 
-	     [binary_to_list(Name_of_files)]}
+	    Length = dict:fetch(<<"length">>, Info_dict),
+	    {Length, 
+	     [binary_to_list(Name_of_files)], [Length]}
     end.
-
-    
 get_length([], Total) ->
     Total;
 get_length([{_,H}|T], Total) ->
-    {ok, Value} = dict:find(<<"length">>,H),
+    {ok, Value} = dict:find(<<"length">>, H),
     get_length(T, Total+Value).
-
+get_lengths_list([]) ->
+    [];
+get_lengths_list([{_,H}|T]) ->
+    {ok, Value} = dict:find(<<"length">>,H),
+    [Value|get_lengths_list(T)].
+get_names([]) ->
+    [];
+get_names([{_, H}|T]) ->
+    {ok, {list, [Value]}} = dict:find(<<"path">>, H),
+    io:format("~n~w~n", [Value]),
+    [binary_to_list(Value)|get_names(T)].
 handle_pieces([], Piece_list, _Byte, New_list) ->
     lists:reverse([lists:reverse(Piece_list)|New_list]);
 handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->

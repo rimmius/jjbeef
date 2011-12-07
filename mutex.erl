@@ -13,6 +13,7 @@ start(Module, Args) ->
 
 init(Module, Args) ->
     StoragePid = apply(Module, start, Args), %%changed this to apply to make it easier to apply the arguments of the start function.
+    link(StoragePid),
     free(StoragePid).
 
 stop(MutexPid) ->

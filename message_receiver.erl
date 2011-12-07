@@ -34,7 +34,7 @@ loop(Parent, Socket, Msg_reader_pid) ->
     end.
 
 do_recv(Parent, Socket, Msg_reader_pid) ->    
-    case gen_tcp:recv(Socket, 4, 120000) of
+    case gen_tcp:recv(Socket, 4, 240000) of
 	{ok, <<0,0,0,0>>} ->
 	    %% keep-alive
 	    io:format("~n~n*****~w*****keep-alive len=0 ~n", [self()]),

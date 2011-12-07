@@ -1,27 +1,26 @@
 %%%Created by: Fredrik Gustafsson
 %%%Date: 16-11-2011
 -module(file_storage).
--export([start/4, init/4]).
+-export([start/5, init/5]).
 
-start(Dl_storage_pid, Files, Length, Piece_length) ->
-    spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length]).
+start(Dl_storage_pid, Files, Length, Piece_length, Length_in_list) ->
+    spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length, Length_in_list]).
 
-init(Dl_storage_pid, Files, Length, Piece_length) ->
+init(Dl_storage_pid, Files, Length, Piece_length, Length_in_list) ->
     Data = initiate_data(0, Length),
     Table_id = ets:new(torrent, [ordered_set]),
-    loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length).
+    loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length, Length_in_list).
 
 initiate_data(Nr, Length) when Nr =< Length ->
     [{0, Nr}|initiate_data(Nr+1, Length)];
 initiate_data(_Nr, _Length) ->
     [].
-
-loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
+loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list) ->
     receive
 	{request, get_bitfield, [], From} ->
 	    Reply = strip_bitfield(Bitfield, 0, length(Bitfield)-1),
 	    From ! {reply, Reply},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
 	{request, insert_chunk, [Index, Begin, Block, Block_length], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -31,18 +30,24 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 		[{Index, Chunk_table_id}] ->
 		    ets:insert(Chunk_table_id, {Begin, Block, Block_length})
 	    end,
-	    {ok , Io} = file:open(H, [write]),
-	    ok =  write_to_file(Table_id, 0, Length, Io, Piece_length),
-	    ok = file:close(Io),
+	    case length([H|T]) =:= 1 of
+		true ->
+		    {ok , Io} = file:open(H, [write]),
+		    ok =  write_to_file(Table_id, 0, Length, Io, Piece_length),
+		    ok = file:close(Io);
+		_ ->
+		    {ok, Io} = file:open(H, [write]),
+		    write_to_files(Io,Table_id, 0,0, [H|T], Length, Length_in_list, Piece_length)
+	    end,
 	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length, Dl_storage_pid),
 	    From ! {reply, check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid)},
-	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length);
+	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length, Length_in_list);
 	{request, compare_bitfield, [Peer_bitfield], From} ->
 	    From ! {reply, {ok, am_interested(Bitfield, Peer_bitfield, 0, length(Bitfield)-1)}},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
 	{request, have, [Index], From} ->
 	    From ! {reply, have(Index, Bitfield)},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
 	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -53,7 +58,25 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length) ->
 		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length)
 	    end,
 	    From ! {reply, Reply},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length)
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list)
+    end.
+write_to_files(Io, Table_id, Cur_index, Acc, [File_name|Rest], Length, [Size|Sizes], Piece_length) when Cur_index =< Length, Acc =< Size ->
+    case ets:lookup(Table_id, Cur_index) of
+	[] ->
+	    write_to_files(Io, Table_id, Cur_index+1, Acc+Piece_length, [File_name|Rest], Length, [Size|Sizes], Piece_length);
+	[{Cur_index, Chunk_table_id}] ->
+	    write_out_chunks(Chunk_table_id, 0, Piece_length, Io),
+	    write_to_files(Io, Table_id, Cur_index+1, Acc+Piece_length, [File_name|Rest], Length, [Size|Sizes], Piece_length)
+    end;
+write_to_files(Io, Table_id, Cur_index, Acc, [_File_name|Rest], Length, [_Size|Sizes], Piece_length) when Cur_index =< Length ->
+    ok = file:close(Io),
+    case Rest of
+	[] ->
+	    io:format("~n~n~nDONE!!!!"),
+	    ok;
+	_List ->
+	    {ok, New_io} = file:open(hd(Rest), [write]),
+	    write_to_files(New_io, Table_id, Cur_index, Acc, Rest, Length, Sizes, Piece_length)
     end.
 
 generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid) when Acc =< Length ->

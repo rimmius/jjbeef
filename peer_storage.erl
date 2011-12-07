@@ -115,6 +115,155 @@ read_field(peer_table, PeerId, Field) ->
 	port -> Peer#peer.port;
 	request -> Peer#peer.request
     end.
-   
+
+
+%%%%%%%% TEST CODE %%%%%%%
+
+setup() ->
+    Pid = peer_storage:start(),
+    register(?MODULE, Pid),
+    ?MODULE ! {request, insert_new_peer, 
+	       [ip1, peer1, 1, 2, req1], self()},
+    receive {reply, _Reply} -> ok end,
+    Pid.
+
+cleanup(Pid) ->
+    Pid ! stop.
+
+%% Id:                 9 
+%% Title:              Insert new peer
+%% Purpose:            Ensure correct insertion of a new peer
+%% Prerequisites:      Existing table
+%% Expected result:    The peer and info has been correctly inserted into table
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
+insert_new_peer_test_() ->
+    {spawn,
+     {setup,
+      fun setup/0,
+      fun cleanup/1,
+      fun() ->
+	     [?assertMatch([#peer{peerid = peer1, interested = 0, choke = 1, 
+			   ip = ip1, socket = 1, port = 2, 
+			   request = req1}], 
+			  ets:lookup(peer_table, peer1)),
+	     ?assertMatch([], ets:lookup(peer_table, peer2)),
+	     ?assertError(badarg, ets:lookup(peer2_table, peer1))]
+      end
+     }
+    }.
+
+%% Id:                 10 
+%% Title:              Update peer
+%% Purpose:            Ensure correct update of peer related info
+%% Prerequisites:      Existing table with peers stored in it
+%% Expected result:    The peer info is updated
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
+update_peer_test_() ->
+    {spawn,
+     {setup,
+      fun setup/0,
+      fun cleanup/1,
+      fun() ->
+	      ?MODULE ! {request, update_peer, 
+		      [peer1, socket, 3], self()},
+	      receive {reply, _} -> ok end,
+	      ?assertMatch([#peer{peerid = peer1, interested = 0, choke = 1, 
+			   ip = ip1, socket = 3, port = 2, request = req1}], 
+			    ets:lookup(peer_table, peer1)),
+
+	      ?MODULE ! {request, update_peer, 
+		      [peer1, interested, 1], self()},
+	      receive {reply, _} -> ok end,
+	      ?assertMatch([#peer{peerid = peer1, interested = 1, choke = 1, 
+			   ip = ip1, socket = 3, port = 2, request = req1}], 
+			    ets:lookup(peer_table, peer1)),
+
+	      ?MODULE ! {request, update_peer, 
+		      [peer1, choke, 0], self()},
+	      receive {reply, _} -> ok end,
+	      ?assertMatch([#peer{peerid = peer1, interested = 1, choke = 0, 
+			   ip = ip1, socket = 3, port = 2, request = req1}], 
+			    ets:lookup(peer_table, peer1)),
+
+	      ?MODULE ! {request, update_peer, 
+		      [peer1, port, 5], self()},
+	      receive {reply, _} -> ok end,
+	      ?assertMatch([#peer{peerid = peer1, interested = 1, choke = 0, 
+			   ip = ip1, socket = 3, port = 5, request = req1}], 
+			    ets:lookup(peer_table, peer1)),
+
+	      ?MODULE ! {request, update_peer, 
+		      [peer1, request, req3], self()},
+	      receive {reply, _} -> ok end,
+	      ?assertMatch([#peer{peerid = peer1, interested = 1, choke = 0, 
+			   ip = ip1, socket = 3, port = 5, request = req3}], 
+			    ets:lookup(peer_table, peer1))
+      end
+     }
+    }.
+
+%% Id:                 11 
+%% Title:              Delete peer
+%% Purpose:            Ensure correct deletion when a peer disconnectes
+%% Prerequisites:      Existing tbale with peer/peers
+%% Expected result:    The peer and all its info has been correctly removed
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
+delete_peer_test_() ->
+    {spawn,
+     {setup,
+      fun setup/0,
+      fun cleanup/1,
+      fun() ->
+	      ?MODULE ! {request, delete_peer, 
+		      [peer1], self()},
+	      receive {reply, _Reply} -> ok end,
+	      ?assertMatch([], ets:lookup(peer_table, peer1))
+      end
+     }
+    }.
+
+%% Id:                 12 
+%% Title:              Get specific field info
+%% Purpose:            Retrieve specific field info about a peer 
+%% Prerequisites:      Existing table with peer/peers
+%% Expected result:    The requested field info is returned
+%% Pass/Fail criteria: When run response is "All tests passed"/When run 
+%%                     response is error
+
+read_field_test_() ->
+    {spawn,
+     {setup,
+      fun setup/0,
+      fun cleanup/1,
+      fun() ->
+	      ?MODULE ! {request, read_field, [peer1, port], self()},
+	      receive {reply, PortReply} -> ok end,
+	      ?assertEqual(PortReply, 2),
+
+	      ?MODULE ! {request, read_field, [peer1, interested], self()},
+	      receive {reply, IntReply} -> ok end,
+	      ?assertEqual(IntReply, 0),
+
+	      ?MODULE ! {request, read_field, [peer1, choke], self()},
+	      receive {reply, ChokeReply} -> ok end,
+	      ?assertEqual(ChokeReply, 1),
+
+	      ?MODULE ! {request, read_field, [peer1, socket], self()},
+	      receive {reply, SockReply} -> ok end,
+	      ?assertEqual(SockReply, 1),
+
+	      ?MODULE ! {request, read_field, [peer1, request], self()},
+	      receive {reply, ReqReply} -> ok end,
+	      ?assertEqual(ReqReply, req1)
+      end
+     }
+    }.
+    
     
 
