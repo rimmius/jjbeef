@@ -38,13 +38,15 @@ loop(Tid) ->
 		%%     end
 	    end,
 	    loop(Tid);
+	{lookup, Pid, From} -> Result = ets:lookup(Tid, Pid),
+				 From ! {reply, Result};  
 	stop -> ok	
     end.
 
 %% insert new piece that has chosen to be downloaded
-write(Tid, PieceIndex,Tuple,Pid) ->
-    {PieceIndex,{Hash,Peers}} = Tuple,
-    ets:insert(Tid, {Pid, {PieceIndex,{Hash,Peers}}}).
+write(Tid, PieceIndex, Tuple, Pid) ->
+    {PieceIndex, {Hash,Peers}} = Tuple,
+    ets:insert(Tid, {Pid, {PieceIndex, {Hash, Peers}}}).
 
 %% if peer has disconnected, remove its peerId from the list storing which
 %% peers are downloading the paticular piece.
