@@ -10,9 +10,9 @@
 -export([start_link/7, start_receiving/1]).
 -export([init/7, loop/3]).
 
-start_link(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
       Socket, Peer_id) ->
-    spawn_link(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
+    spawn(?MODULE, init, [Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 			       Socket, Peer_id]).
 
 init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
@@ -20,6 +20,7 @@ init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
     Msg_reader_pid = message_reader:start_link(Grandparent, 
 					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 					  Peer_id),
+    link(Msg_reader_pid),
     loop(Parent, Socket, Msg_reader_pid).
 
 start_receiving(Pid) ->
@@ -85,13 +86,13 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%request
 		    io:format("~n*****~w*****Request len=13, id=6, index=~w, begin=~w, length=~w~n", 
 			      [self(), Index, Begin, Length]),
-		    %% NOTIN IS DONE ATM
+		    message_reader:read_msg(Msg_reader_pid, request, [Index, Begin, Length]),
 		    message_handler:done(Parent);
 		{ok, <<8, Index:32, Begin:32, Length:32>>} ->
 		    %%cancel
 		    io:format("~n*****~w*****Cancel len=13, id=8, index=~w, begin=~w, length=~w~n", 
 			      [self(), Index, Begin, Length]),
-		    %% NOTING IS DONE ATM
+		    message_reader:read_msg(Msg_reader_pid, cancel, [Index, Begin, Length]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
 		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),

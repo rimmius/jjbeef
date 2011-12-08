@@ -85,7 +85,7 @@ update_interest(Pid, Index_in_list, Action) ->
 %%--------------------------------------------------------------------
 init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id]) ->
     process_flag(trap_exit, true),
-    Msg_handler_pid = message_handler:start_link(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
+    Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     link(Msg_handler_pid),
     io:format("msg_handler started~n"),
     My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),

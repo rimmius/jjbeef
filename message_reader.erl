@@ -3,8 +3,8 @@
 -export([loop/5]).
 
 %% exported
-start_link(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
-    spawn_link(?MODULE, loop, [Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
+start(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
+    spawn(?MODULE, loop, [Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
 
 read_msg(Pid, Type, Args) ->
     Pid ! {Type, Args}.
