@@ -51,8 +51,9 @@ send_event(Pid, am_choked, Am_choked) ->
     end;
 send_event(Pid, piece, {Is_complete, Index}) ->
     case Is_complete of
-	1 -> gen_fsm:send_event(Pid, {piece_complete, Index});
-	0 -> gen_fsm:send_event(Pid, {piece_incomplete, Index})
+	true -> gen_fsm:send_event(Pid, {piece_complete, Index});
+	false -> gen_fsm:send_event(Pid, {piece_incomplete, Index});
+	error -> gen_fsm:send_event(Pid, {piece_error, Index})
     end;
 send_event(Pid, keep_alive, _) ->
     gen_fsm:send_all_state_event(Pid, keep_alive).
@@ -157,6 +158,34 @@ am_unchoked_interested({piece_incomplete, Index}, State) ->
 	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 	    {next_state, am_unchoked_interested, State, 0}
     end;
+am_unchoked_interested({piece_error, Index}, State) ->
+	Reply = mutex:request(State#state.piece_storage, get_rarest_index_again, [State#state.peer_id, Index]),
+    mutex:received(State#state.piece_storage),
+	
+	case Reply of
+	{ok, Index, Data} ->
+	    %% write the piece into dl_sto and remove it from piece_sto
+	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
+	    mutex:received(State#state.download_storage),	    
+	    
+	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
+	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
+	    mutex:received(State#state.file_storage),
+
+	    case Chunk_result of
+		{Begin, Length} ->
+		    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
+		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
+		    %% without timeout, wait for complete/incomplete
+		    {next_state, am_unchoked_interested, State};
+		access_denied ->
+		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
+		    {next_state, am_unchoked_interested, State, 0}
+	    end;		
+	{hold} -> 
+	    io:format("*****hold****** im not requesting any pieces for 20 seconds!!!! da shit wuha kung fu panda!!~n"),
+	    {next_state, am_unchoked_interested, State, 20000}
+    end;	
 am_unchoked_interested(timeout, State) ->
     Reply = mutex:request(State#state.piece_storage, get_rarest_index, [State#state.peer_id]),
     mutex:received(State#state.piece_storage),
