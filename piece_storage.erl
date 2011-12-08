@@ -57,7 +57,17 @@ loop(Tid, Nr_of_pieces)->
 			    Reply;
 			{hold} ->
 			    Reply
-		    end		   
+		    end;		   
+		get_rarest_again ->
+		    [PeerId,Index] = Args,
+		    Reply = get_rarest_again(Tid,PeerId,Index,Nr_of_pieces),
+		    case Reply of
+			{ok, Index, _Tuple} ->
+			    delete_piece(Tid, Index),
+			    Reply;
+			{hold} ->
+			    Reply
+		    end	
 	    end,
 	    From ! {reply, Reply},
 	    loop(Tid, Nr_of_pieces);
@@ -74,6 +84,21 @@ delete_piece(Tid, Index) ->
 
 put_piece_back(Tid, Index, Hash, Peers)->
     ets:insert(Tid, {Index, {Hash, Peers}}).
+
+get_rarest_again(Tid,PeerId,Index,Nr_of_pieces)->
+    L = get_rarest(Tid,0,Nr_of_pieces,[]),
+    RarestList = kick_out(Index,L),
+    get_rarest_index_inner(Tid,PeerId,RarestList).
+    
+kick_out(Index,[H|T])->
+    case Index == H of
+	false->
+	    [H|kick_out(Index,T)];
+	true ->
+	    T
+    end;
+kick_out(_Index,[]) ->
+    [].
 
 get_rarest_index(Tid, PeerId, Nr_of_pieces)->
     RarestList = get_rarest(Tid, 0, Nr_of_pieces, []),
