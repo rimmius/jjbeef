@@ -141,8 +141,10 @@ am_unchoked_interested(am_unchoked, State) ->
 	%% without timeout
     {next_state, am_unchoked_interested, State};
 am_unchoked_interested({piece_complete, Index}, State) ->
+    io:format("**piece_requester~w**  piece_complete received by piece_requester~n", [self()]),
     peers:notice_have(State#state.parent, Index),
     message_handler:send(State#state.msg_handler, have, Index),
+    io:format("**piece_requester~w**  have sent. going to request again, see io:format below~n", [self()]),
     {next_state, am_unchoked_interested, State, 0};
 am_unchoked_interested({piece_incomplete, Index}, State) ->
     Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
@@ -150,7 +152,7 @@ am_unchoked_interested({piece_incomplete, Index}, State) ->
     
     case Chunk_result of
 	{Begin, Length} ->
-	    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
+	    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    %% without timeout, wait for complete/incomplete
 	    {next_state, am_unchoked_interested, State};
@@ -159,7 +161,7 @@ am_unchoked_interested({piece_incomplete, Index}, State) ->
 	    {next_state, am_unchoked_interested, State, 0}
     end;
 am_unchoked_interested({piece_error, Index}, State) ->
-	Reply = mutex:request(State#state.piece_storage, get_rarest_index_again, [State#state.peer_id, Index]),
+    Reply = mutex:request(State#state.piece_storage, get_rarest_index_again, [State#state.peer_id, Index]),
     mutex:received(State#state.piece_storage),
 	
 	case Reply of
@@ -168,13 +170,13 @@ am_unchoked_interested({piece_error, Index}, State) ->
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),	    
 	    
-	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
+	    io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
 	    mutex:received(State#state.file_storage),
 
 	    case Chunk_result of
 		{Begin, Length} ->
-		    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
+		    io:format("**piece_requester~w** Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% without timeout, wait for complete/incomplete
 		    {next_state, am_unchoked_interested, State};
@@ -197,13 +199,13 @@ am_unchoked_interested(timeout, State) ->
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),	    
 	    
-	    io:format("~w   got rarest index = ~w, rdy to send request ~n", [self(), Index]),
+	    io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
 	    mutex:received(State#state.file_storage),
 
 	    case Chunk_result of
 		{Begin, Length} ->
-		    io:format("Rdy to request index=~w, begin=~w, length=~w~n", [Index, Begin, Length]),
+		    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% without timeout, wait for complete/incomplete
 		    {next_state, am_unchoked_interested, State};
