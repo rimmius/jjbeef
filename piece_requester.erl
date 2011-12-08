@@ -83,6 +83,7 @@ update_interest(Pid, Index_in_list, Action) ->
 %% @end
 %%--------------------------------------------------------------------
 init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id]) ->
+    process_flag(trap_exit, true),
     Msg_handler_pid = message_handler:start_link(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     link(Msg_handler_pid),
     io:format("msg_handler started~n"),
@@ -334,8 +335,9 @@ handle_sync_event(_Event, _From, StateName, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_info(_Info, StateName, State) ->
-    {next_state, StateName, State}.
+handle_info({'EXIT', _Pid, _Reason}, StateName, State) ->
+    terminate(child_killed, StateName, State).
+    %%{stop, StateName, State}.
 
 %%--------------------------------------------------------------------
 %% @private
