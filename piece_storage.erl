@@ -48,8 +48,6 @@ loop(Tid, Nr_of_pieces)->
 		put_piece_back ->
 		    [Index, Hash, Peers]=Args,
 		    Reply = put_piece_back(Tid, Index, Hash, Peers);
-		get_rarest ->
-		    Reply = get_rarest(Tid, 0, Nr_of_pieces, []);
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(Tid, PeerId, Nr_of_pieces),
