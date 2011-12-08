@@ -183,7 +183,7 @@ am_unchoked_interested(timeout, State) ->
 		    {next_state, am_unchoked_interested, State, 0}
 	    end;		
 	{hold} -> 
-	    io:format("hold da shit wuha kung fu panda!!~n"),
+	    io:format("*****hold****** im not requesting any pieces for 20 seconds!!!! da shit wuha kung fu panda!!~n"),
 	    {next_state, am_unchoked_interested, State, 20000}
     end.
 %% and/or keep_alive
@@ -341,14 +341,13 @@ handle_info({'EXIT', Pid, _Reason}, _StateName, State) ->
     Parent = State#state.parent,
     case Pid of
 	Msg_handler ->	    
-	    io:format("*****EXIT*****piece_requester (~w)'s child killed~n", [self()]),
-	    {stop, child_killed, State};
+	    io:format("*****EXIT*****piece_requester (~w)'s child killed~n", [self()]);
 	Parent ->
 	    io:format("*****EXIT*****piece_requester (~w)'s parent killed~n", [self()]),
 	    message_handler:close_socket(Msg_handler),
-	    io:format("*****EXIT*****socket successfully closed~n"),
-	    {stop, parent_killed, State}
-    end.
+	    io:format("*****EXIT*****socket successfully closed~n")
+    end,
+    {ok, normal, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -361,7 +360,7 @@ handle_info({'EXIT', Pid, _Reason}, _StateName, State) ->
 %% @spec terminate(Reason, StateName, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(_Reason, _StateName, _State) ->
+terminate(normal, _StateName, _State) ->
     ok.
 
 %%--------------------------------------------------------------------
