@@ -160,8 +160,8 @@ am_unchoked_interested({piece_incomplete, Index}, State) ->
 	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 	    {next_state, am_unchoked_interested, State, 0}
     end;
-am_unchoked_interested({piece_error, Index}, State) ->
-    Reply = mutex:request(State#state.piece_storage, get_rarest_index_again, [State#state.peer_id, Index]),
+am_unchoked_interested({piece_error, Old_index}, State) ->
+    Reply = mutex:request(State#state.piece_storage, get_rarest_index_again, [State#state.peer_id, Old_index]),
     mutex:received(State#state.piece_storage),
 	
 	case Reply of
