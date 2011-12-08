@@ -183,6 +183,7 @@ am_unchoked_interested(timeout, State) ->
 		    {next_state, am_unchoked_interested, State, 0}
 	    end;		
 	{hold} -> 
+	    io:format("hold da shit wuha kung fu panda!!~n"),
 	    {next_state, am_unchoked_interested, State, 20000}
     end.
 %% and/or keep_alive
