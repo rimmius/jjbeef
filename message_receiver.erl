@@ -7,7 +7,7 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_receiver).
--export([start_link/7, start_receiving/1]).
+-export([start/7, start_receiving/1]).
 -export([init/7, loop/3]).
 
 start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,

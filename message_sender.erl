@@ -1,5 +1,5 @@
 -module(message_sender).
--export([start_link/2, send/3]).
+-export([start/2, send/3]).
 -export([loop/2, do_send/3]).
 
 start(Parent, Socket) ->

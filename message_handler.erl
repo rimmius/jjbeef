@@ -7,7 +7,7 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start_link/6, send/3, done/1, error/2, close_socket/1]).
+-export([start/6, send/3, done/1, error/2, close_socket/1]).
 -export([loop/5, init/6]).
 
 start(Parent, Socket, Peer_id, 

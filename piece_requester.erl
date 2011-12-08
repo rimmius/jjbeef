@@ -376,7 +376,7 @@ handle_info({'EXIT', Pid, _Reason}, _StateName, State) ->
 	    message_handler:close_socket(Msg_handler),
 	    io:format("*****EXIT*****socket successfully closed~n")
     end,
-    {ok, normal, State}.
+    {stop, normal, State}.
 
 %%--------------------------------------------------------------------
 %% @private

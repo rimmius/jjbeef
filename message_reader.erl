@@ -1,5 +1,5 @@
 -module(message_reader).
--export([start_link/5, read_msg/3]).
+-export([start/5, read_msg/3]).
 -export([loop/5]).
 
 %% exported
