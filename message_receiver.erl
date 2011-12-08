@@ -17,7 +17,7 @@ start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 
 init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
      Socket, Peer_id) ->
-    Msg_reader_pid = message_reader:start_link(Grandparent, 
+    Msg_reader_pid = message_reader:start(Grandparent, 
 					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 					  Peer_id),
     link(Msg_reader_pid),
