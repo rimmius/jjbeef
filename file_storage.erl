@@ -1,26 +1,30 @@
 %%%Created by: Fredrik Gustafsson
 %%%Date: 16-11-2011
 -module(file_storage).
--export([start/5, init/5]).
+-export([start/6, init/6]).
 
-start(Dl_storage_pid, Files, Length, Piece_length, Length_in_list) ->
-    spawn(?MODULE, init, [Dl_storage_pid, Files, Length-1, Piece_length, Length_in_list]).
+start(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
+    spawn(?MODULE, init, [Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid]).
 
-init(Dl_storage_pid, Files, Length, Piece_length, Length_in_list) ->
+init(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
     Data = initiate_data(0, Length),
     Table_id = ets:new(torrent, [ordered_set]),
-    loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length, Length_in_list).
+    loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid).
 
 initiate_data(Nr, Length) when Nr =< Length ->
     [{0, Nr}|initiate_data(Nr+1, Length)];
 initiate_data(_Nr, _Length) ->
     [].
-loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list) ->
+loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
     receive
+	{request, how_much, [], From} ->
+	    Reply = Piece_length * get_amount_of_pieces(0, Length, Bitfield),
+	    From ! {reply, Reply},
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, get_bitfield, [], From} ->
 	    Reply = strip_bitfield(Bitfield, 0, length(Bitfield)-1),
 	    From ! {reply, Reply},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, insert_chunk, [Index, Begin, Block, Block_length], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -39,15 +43,16 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 		    {ok, Io} = file:open(H, [write]),
 		    write_to_files(Io,Table_id, 0,0, [H|T], Length, Length_in_list, Piece_length)
 	    end,
-	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length, Dl_storage_pid),
-	    From ! {reply, check_piece(0, Index, Chunk_table_id, Piece_length, Dl_storage_pid)},
-	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length, Length_in_list);
+	    From ! {reply, check_piece(0, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, "", Piece_storage_pid)},
+	    New_bitfield = generate_bitfield(0, Length, Table_id, Piece_length, Dl_storage_pid, Piece_storage_pid),
+	    io:format("~nLength=~wBITFIELD~w~n", [Length, New_bitfield]),
+	    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, compare_bitfield, [Peer_bitfield], From} ->
 	    From ! {reply, {ok, am_interested(Bitfield, Peer_bitfield, 0, length(Bitfield)-1)}},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, have, [Index], From} ->
 	    From ! {reply, have(Index, Bitfield)},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list);
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -58,7 +63,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length)
 	    end,
 	    From ! {reply, Reply},
-	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list)
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid)
     end.
 write_to_files(Io, Table_id, Cur_index, Acc, [File_name|Rest], Length, [Size|Sizes], Piece_length) when Cur_index =< Length, Acc =< Size ->
     case ets:lookup(Table_id, Cur_index) of
@@ -78,26 +83,52 @@ write_to_files(Io, Table_id, Cur_index, Acc, [_File_name|Rest], Length, [_Size|S
 	    {ok, New_io} = file:open(hd(Rest), [write]),
 	    write_to_files(New_io, Table_id, Cur_index, Acc, Rest, Length, Sizes, Piece_length)
     end.
-
-generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid) when Acc =< Length ->
+get_amount_of_pieces(Acc, Length, Bitfield) when Acc < Length ->
+    {value, {Have, Acc}} = lists:keysearch(Acc, 2, Bitfield),
+    Have+get_amount_of_pieces(Acc+1, Length, Bitfield);
+get_amount_of_pieces(_Acc, _Length, _Bitfield) ->
+    0.
+generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid, Piece_storage_pid) when Acc < Length ->
     case ets:lookup(Table_id, Acc) of
 	[] ->
-	    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid)];
+	    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid, Piece_storage_pid)];
 	[{_, Chunk_table_id}]  ->
-	    [{check_piece(0, Acc, Chunk_table_id, Piece_length, Dl_storage_pid), Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid)]
+	    [{check_piece_clean(0, Acc, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, "", Piece_storage_pid), Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, Dl_storage_pid, Piece_storage_pid)]
     end;
 
-generate_bitfield(_Acc, _Length, _Table_id, _Piece_length, _Dl_storage_pid) ->
+generate_bitfield(_Acc, _Length, _Table_id, _Piece_length, _Dl_storage_pid, _Piece_storage_pid) ->
     [].
-
-check_piece(Acc, Index, Chunk_table_id, Piece_length, Dl_storage_pid) when Acc < Piece_length ->
+check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc =< Piece_length ->
+    case ets:lookup(Chunk_table_id, Acc) of
+	[] ->
+	    false;
+	[{_Begin, Block, Length_of_block}] ->
+	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks ++ [<<Block:Length_of_block>>], Piece_storage_pid)
+    end;
+check_piece(_Acc, Index, Table_id,  _Chunk_table_id, _Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
+    Hash = sha:sha1raw(list_to_binary(Blocks)),
+    case mutex:request(Dl_storage_pid, compare_hash, [Index, Hash]) of
+	true ->
+	    mutex:received(Dl_storage_pid),
+	    true;
+	_What  ->
+	    mutex:received(Dl_storage_pid),
+	    ets:delete(Table_id, Index),
+	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, put_back_without_pid, [Index]),
+	    mutex:received(Dl_storage_pid),
+	    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers]),
+	    mutex:received(Piece_storage_pid),
+	    io:format("~n~nPIECE IS FAAAAAAAALSE~n~n"),
+	    error
+    end.
+check_piece_clean(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    0;
-	[{_Begin, _Block, Length_of_block}] ->
-	    check_piece(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Dl_storage_pid)
+	[{_Begin, Block, Length_of_block}] ->
+	    check_piece_clean(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks ++ [<<Block:Length_of_block>>], Piece_storage_pid)
     end;
-check_piece(_Acc, _Index, _Chunk_table_id, _Piece_length, _Dl_storage_pid) ->
+check_piece_clean(_Acc, _Index, _Table_id,  _Chunk_table_id, _Piece_length, _Dl_storage_pid, _Blocks, _Piece_storage_pid) ->
     1.
 
 strip_bitfield(Bitfield, Acc, Max) when Acc =< Max ->
@@ -136,7 +167,7 @@ am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
 	1 ->
 	    case Our_have of
 		0 ->
-		    [Have|am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)];
+		    [Acc|am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)];
 		1 ->
 		    am_interested(Our_bitfield, Peer_bitfield, Acc+1, Max)
 	    end;

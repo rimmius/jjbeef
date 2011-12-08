@@ -14,30 +14,28 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Len
     process_flag(trap_exit, true),
     Peer_storage_pid = mutex:start(peer_storage, []),
     link(Peer_storage_pid),
-
-    Dl_storage_pid = mutex:start(downloading_storage, []),
-    link(Dl_storage_pid),
-    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, length(List_of_pieces), Piece_length, Length_in_list]),
-    link(File_storage_pid),
     Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces]),
     link(Piece_storage_pid),
+    Dl_storage_pid = mutex:start(downloading_storage, []),
+    link(Dl_storage_pid),
+    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, length(List_of_pieces), Piece_length, Length_in_list, Piece_storage_pid]),
+    link(File_storage_pid),
 
     Peers_pid = self(),
     Port_listener_pid = port_listener:start(6881, Dl_pid, Peers_pid),
     link(Port_listener_pid),
    
-    spawn(fun() ->start_send(connect_to_tracker:make_list(Tracker_list, []), Peers_pid, Dl_pid, Length) end),
-    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, []).
+    spawn(fun() ->start_send(connect_to_tracker:make_list(Tracker_list, []), Peers_pid, Dl_pid, Length, File_storage_pid) end),
+    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, []).
 
-start_send([H|T], Peers_pid, Dl_pid, Length) ->
+start_send([H|T], Peers_pid, Dl_pid, Length, File_storage_pid) ->
     process_flag(trap_exit, true),
-    send_to_tracker([H|T], Peers_pid, Dl_pid, Length).
-send_to_tracker([],  Peers_pid, _Dl_pid, _Length) ->
+    send_to_tracker([H|T], Peers_pid, Dl_pid, Length, File_storage_pid).
+send_to_tracker([],  Peers_pid, _Dl_pid, _Length, _File_storage_pid) ->
     io:format("KILLING PEERS"),
     exit(Peers_pid, kill);
-    
-send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
-    Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length),
+send_to_tracker([H|T],  Peers_pid, Dl_pid, Length, File_storage_pid) ->
+    Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length, File_storage_pid),
     link(Tracker_pid),
     Tracker_pid ! {connect, self(), H},
     receive
@@ -45,19 +43,20 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length) ->
 	    insert_new_peers(Peers, Peers_pid, Dl_pid);
 	{'EXIT', Tracker_pid, _Reason} ->
 	    io:format("connecting to next tracker in list from exit ~n"),
-	    send_to_tracker(T, Peers_pid, Dl_pid, Length)
+	    send_to_tracker(T, Peers_pid, Dl_pid, Length, File_storage_pid)
     after 10000 ->
 	    io:format("connecting to next tracker in list ~n"),
-	    send_to_tracker(T, Peers_pid, Dl_pid, Length)
+	    send_to_tracker(T, Peers_pid, Dl_pid, Length, File_storage_pid)
     end.
  
-loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children) ->
+loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children) ->
     receive
 	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
-	    case length(Children) > 30 of
+	    case length(Children) > 50 of
 		true ->
+		    From ! {error, no_more_peers},
 		    gen_tcp:close(Sock),
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 		_ ->
 		    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 								      Sock, Port, undefined]),
@@ -67,46 +66,43 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Chil
 		    New_children = insertChild({Pid, Sock}, Children),
 		    From ! {reply, ok},
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
 	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case length(Children) > 30 of
+	    case length(Children) > 50 of
 		true ->
 		    From ! {error, no_more_peers},
-		    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 		_ ->
-		    case gen_tcp:connect(Host, Port, [binary, {active, false},
-						      {packet, 0}], 1000) of
-			{ok, Sock} ->
-			    Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>,
-						  <<3,2,1,3,2,1,2,3>>,Info,
-						  list_to_binary(Peer_id)]),
-			    ok = gen_tcp:send(Sock, Msg),
-			    io:format("Sent handshake to peer from tracker~n"),
-			    From ! {reply, ok, Sock},
-			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+		    My_pid = self(),
+		    Hs_pid = spawn(fun() ->connect_and_handshake:start(Host, Port, Info, Peer_id, My_pid) end),
+		    receive
+			{reply, ok, Sock} ->
+			    From ! {reply, ok, Sock};
 			{error, Reason} ->
-			    io:format(Reason),
-			    From ! {error, Reason},
-			    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children)
-		    end
+			    From ! {error, Reason}
+		    after 5000 ->
+			    From ! {error, timeout},
+			    exit(Hs_pid, kill)
+		    end,
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children)
 	    end;
 	{update_interest, From, Index} ->
 	    From ! {reply, update_interest(Children, Index)},
-	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
-	    loop(peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);		
+	    loop(Dl_pid, peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);		
 	{'EXIT', Piece_storage_pid, Reason} ->
 	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without piece_storage"),
-	    loop(Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Children);
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Children);
 	{'EXIT', File_storage_pid, Reason} ->
 	    io:format("exit file_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without file_storage"),
-	    loop(Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children);
-	{'EXIT', Child, _Reason} ->
+	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children);
+	{'EXIT', Child, _} ->
 	    io:format("~n~nChild crashed!!!!!!!!!!!!!~w~n~n", [Child]),
 	    case mutex:request(Dl_storage_pid, put_back, [Child]) of
 		[] ->
@@ -120,20 +116,19 @@ loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Chil
 		    io:format("~n~n~nmoved back that piece~n~n")
 	    end,
 	    New_children = removeChild(Child, Children, []),
-	    loop(Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
     end.
+
 removeChild(_Child, [], New_children) ->
     New_children;
 removeChild(Child, [{Pid, Socket}|T], New_children) ->
     case Child of
 	Pid ->
 	    io:format("~n~nFOUND THAT PEER, REMOVING~n~n"),
-	    gen_tcp:close(Socket),
 	    removeChild(Child, T, New_children);
 	_  ->
 	    removeChild(Child, T, [{Pid, Socket}|New_children])
     end.
-
 insertChild({Pid, Socket}, List) ->
     [{Pid, Socket}|List].
 
@@ -218,7 +213,9 @@ insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
     Peers_pid ! {insert_new_peer, self(), {Host, Peer_id, Sock, Port}},
     receive
 	{reply, Reply} ->
-	    Reply
+	    Reply;
+	{error, _} ->
+	    ok
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
@@ -236,7 +233,5 @@ update_interest(Children, Index).
 
 notice_have(Pid, Index) ->
     Pid ! {update_interest, self(), Index},
-    receive
-	{reply, Reply} ->
-	    Reply
-    end.
+    io:format("FUCKFACE"),
+    ok.

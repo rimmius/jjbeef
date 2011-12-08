@@ -59,8 +59,8 @@ loop(Tid, Nr_of_pieces)->
 			    Reply
 		    end;		   
 		get_rarest_again ->
-		    [PeerId,Index] = Args,
-		    Reply = get_rarest_again(Tid,PeerId,Index,Nr_of_pieces),
+		    [PeerId,Old_index] = Args,
+		    Reply = get_rarest_again(Tid,PeerId,Old_index,Nr_of_pieces),
 		    case Reply of
 			{ok, Index, _Tuple} ->
 			    delete_piece(Tid, Index),
@@ -91,7 +91,7 @@ get_rarest_again(Tid,PeerId,Index,Nr_of_pieces)->
     get_rarest_index_inner(Tid,PeerId,RarestList).
     
 kick_out(Index,[H|T])->
-    case Index == H of
+    case Index =:= H of
 	false->
 	    [H|kick_out(Index,T)];
 	true ->

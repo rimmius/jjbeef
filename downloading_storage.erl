@@ -5,8 +5,6 @@
 -module(downloading_storage).
 -export([start/0, init/0]).
 
--include_lib("eunit/include/eunit.hrl").
-
 start() ->
     spawn(?MODULE, init, []).
 
@@ -20,17 +18,18 @@ loop(Tid) ->
 	{request, Function, Args, From} ->
 	    case Function of
 		write_piece ->
-		    [PieceIndex, Tuple, Pid] = Args,
-		    From ! {reply, write(Tid, PieceIndex, Tuple, Pid)};
+		    [PieceIndex, Tuple,Pid]
+			= Args,
+		    From ! {reply, write(Tid, PieceIndex, Tuple,Pid)};
 		put_back ->
 		    [Pid] = Args,
 		    From ! {reply, put_back(Tid, Pid)};
 		compare_hash ->
-		    [FileIndex, FileHash] = Args,
-		    From ! {reply,compare_hash(Tid, FileIndex, FileHash)};
+		    [FileIndex,FileHash]= Args,
+		    From!{reply,compare_hash(Tid,FileIndex,FileHash)};
 		put_back_without_pid ->
 		    [FileIndex] = Args,
-		    From ! {reply,put_back_without_pid(Tid, FileIndex)}
+		    From!{reply,put_back_without_pid(Tid,FileIndex)}
 		%% delete_peer ->
 		%%     [PieceIndex, PeerId] = Args,
 		%%     Reply = delete_peer(Tid, PieceIndex, PeerId),
@@ -42,16 +41,13 @@ loop(Tid) ->
 		%%     end
 	    end,
 	    loop(Tid);
-	{lookup, Data, From} -> Result = ets:lookup(Tid, Data),
-				From ! {reply, Result},
-				loop(Tid);
 	stop -> ok	
     end.
 
 %% insert new piece that has chosen to be downloaded
-write(Tid, PieceIndex, Tuple, Pid) ->
-    {PieceIndex, {Hash, Peers}} = Tuple,
-    ets:insert(Tid, {Pid, {PieceIndex, {Hash, Peers}}}).
+write(Tid, PieceIndex,Tuple,Pid) ->
+    {PieceIndex,{Hash,Peers}} = Tuple,
+    ets:insert(Tid, {Pid, {PieceIndex,{Hash,Peers}}}).
 
 %% if peer has disconnected, remove its peerId from the list storing which
 %% peers are downloading the paticular piece.
@@ -77,43 +73,48 @@ put_back(Tid, Pid)->
 	    {Index, {Hash, Peers}}
     end.
 
-put_back_without_pid(Tid, FileIndex)->
+put_back_without_pid(Tid,FileIndex)->
     First_key = ets:first(Tid),
-    put_back_new(Tid, FileIndex, First_key).
-
-put_back_new(Tid, FileIndex, Key)->
-    [{_Pid, {Index, {Hash, Peers}}}] = ets:lookup(Tid, Key),
+    put_back_new(Tid,FileIndex,First_key).
+put_back_new(Tid,FileIndex,Key)->
+    [{_Pid,{Index,{Hash,Peers}}}] = ets:lookup(Tid,Key),
     case FileIndex =:= Index of
 	true->
-	    {Index, {Hash, Peers}};
+	    {Index,{Hash,Peers}};
 	false ->
-	    Next_key = ets:next(Tid, Key),
+	    Next_key = ets:next(Tid,Key),
 	    case Next_key of
 		'$end_of_table' ->
-		    end_of_table;
+		    io:format("~n~n~w~n~n", [Index]),
+		    end_of_table_w_pid;
 		_found ->
-		    put_back_new(Tid, FileIndex, Next_key)
+		    put_back_new(Tid,FileIndex,Next_key)
 	
 	    end
      end.
 
-compare_hash(Tid, FileIndex, FileHash)->
+
+		
+		
+
+compare_hash(Tid,FileIndex,FileHash)->
     First_key = ets:first(Tid),
-    compare_hash(Tid, FileIndex, FileHash, First_key).
-compare_hash(Tid, FileIndex, FileHash, Key)->
-    [{_Pid, {Index, {Hash, _Peers}}}] = ets:lookup(Tid, Key),
+    compare_hash(Tid,FileIndex,FileHash,First_key).
+compare_hash(Tid,FileIndex,FileHash,Key)->
+    [{_Pid, {Index,{Hash,_Peers}}}]= ets:lookup(Tid,Key),
     case FileIndex =:= Index of
 	true ->
 	    FileHash =:= Hash;
 	false->
-	    Next_key = ets:next(Tid, Key),
+	    Next_key = ets:next(Tid,Key),
 	    case Next_key of
 		'$end_of_table' ->
+		    io:format("~n~n~w~n", [Index]),
 		    end_of_table;
 		_found ->
-		    compare_hash(Tid, FileIndex, FileHash, Next_key)
+		    compare_hash(Tid,FileIndex,FileHash,Next_key)
 	
 	    end
      end.
-
+    
 	    

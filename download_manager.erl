@@ -10,8 +10,9 @@
 start(File, GUIPid) ->
     spawn_link(?MODULE, init, [File, GUIPid]).
     
-init(File, _GUIPid) ->
+init(File, GUIPid) ->
     process_flag(trap_exit, true),
+    link(GUIPid),
     {dict, Dict} = get_torrent_data(File),
     Info_raw = dict:fetch(<<"info">>, Dict),
     Info_bencoded =  bencode:encode(Info_raw),
