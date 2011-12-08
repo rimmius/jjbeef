@@ -336,20 +336,19 @@ handle_sync_event(_Event, _From, StateName, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({'EXIT', Pid, _Reason}, StateName, State) ->
+handle_info({'EXIT', Pid, _Reason}, _StateName, State) ->
     Msg_handler = State#state.msg_handler,
     Parent = State#state.parent,
     case Pid of
 	Msg_handler ->	    
 	    io:format("*****EXIT*****piece_requester (~w)'s child killed~n", [self()]),
-	    terminate(child_killed, StateName, State);
+	    {stop, child_killed, State};
 	Parent ->
 	    io:format("*****EXIT*****piece_requester (~w)'s parent killed~n", [self()]),
 	    message_handler:close_socket(Msg_handler),
 	    io:format("*****EXIT*****socket successfully closed~n"),
-	    terminate(parent_killed, StateName, State)
+	    {stop, parent_killed, State}
     end.
-    %%{stop, StateName, State}.
 
 %%--------------------------------------------------------------------
 %% @private
