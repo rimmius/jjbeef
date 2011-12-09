@@ -26,7 +26,7 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Len
     link(Port_listener_pid),
    
     spawn(fun() ->start_send(connect_to_tracker:make_list(Tracker_list, []), Peers_pid, Dl_pid, Length, File_storage_pid) end),
-    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, []).
+    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, [], Length).
 
 start_send([H|T], Peers_pid, Dl_pid, Length, File_storage_pid) ->
     process_flag(trap_exit, true),
@@ -49,14 +49,14 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length, File_storage_pid) ->
 	    send_to_tracker(T, Peers_pid, Dl_pid, Length, File_storage_pid)
     end.
  
-loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children) ->
+loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length) ->
     receive
 	{insert_new_peer, From, {Host, Peer_id, Sock, Port}} ->
 	    case length(Children) > 50 of
 		true ->
 		    From ! {error, no_more_peers},
 		    gen_tcp:close(Sock),
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
 		    mutex:request(Peer_storage_pid, insert_new_peer, [Host,Peer_id, 
 								      Sock, Port, undefined]),
@@ -66,13 +66,13 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    New_children = insertChild({Pid, Sock}, Children),
 		    From ! {reply, ok},
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
 	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
 	    case length(Children) > 50 of
 		true ->
 		    From ! {error, no_more_peers},
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
 		    My_pid = self(),
 		    Hs_pid = spawn(fun() ->connect_and_handshake:start(Host, Port, Info, Peer_id, My_pid) end),
@@ -85,23 +85,35 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 			    From ! {error, timeout},
 			    exit(Hs_pid, kill)
 		    end,
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children)
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
 	    end;
-	{update_interest, From, Index} ->
-	    From ! {reply, update_interest(Children, Index)},
-	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);
+	{update_interest, Index} ->
+	    update_interest(Children, Index),
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
+	{get_downloaded, From} ->
+	    How_much = mutex:request(File_storage_pid, how_much, []),
+	    mutex:received(File_storage_pid),
+	    case How_much =:= 0 of
+		true ->
+		    From ! {reply, 0},
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
+		_ ->
+		    Perc = (Length div How_much) * 100,
+		    From ! {reply, Perc},
+		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
+	    end;
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
-	    loop(Dl_pid, peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children);		
+	    loop(Dl_pid, peer_storage_crash, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);		
 	{'EXIT', Piece_storage_pid, Reason} ->
 	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without piece_storage"),
-	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Children);
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, piece_storage_crash, Dl_storage_pid, Children, Length);
 	{'EXIT', File_storage_pid, Reason} ->
 	    io:format("exit file_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without file_storage"),
-	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children);
+	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
 	    io:format("~n~nChild crashed!!!!!!!!!!!!!~w~n~n", [Child]),
 	    case mutex:request(Dl_storage_pid, put_back, [Child]) of
@@ -116,7 +128,7 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    io:format("~n~n~nmoved back that piece~n~n")
 	    end,
 	    New_children = removeChild(Child, Children, []),
-	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children)
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
     end.
 
 removeChild(_Child, [], New_children) ->
@@ -229,9 +241,7 @@ update_interest([], _Index) ->
 update_interest([{Child, _Socket} | Children], Index) ->
     %% getting result? not sure
     spawn(piece_requester, update_interest, [Child, [Index], remove]),
-update_interest(Children, Index).
+    update_interest(Children, Index).
 
 notice_have(Pid, Index) ->
-    Pid ! {update_interest, self(), Index},
-    io:format("FUCKFACE"),
-    ok.
+    Pid ! {update_interest, Index}.

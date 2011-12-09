@@ -19,7 +19,7 @@ listen(Port, Dl_pid, Parent) ->
     accept(LSocket, Dl_pid, Parent).
 
 accept(LSocket, Dl_pid, Parent) ->
-    {ok, Socket} = gen_tcp:accept(LSocket),
+    {ok, Socket} = gen_tcp:accept(LSocket) ,
     spawn(fun() -> recv(Socket, Dl_pid, Parent) end),
     accept(LSocket, Dl_pid, Parent).
 
@@ -40,7 +40,7 @@ recv(Socket, Dl_pid, Parent) ->
 			{reply, Pid_h, ok} ->
 			    io:format("**portlistener~w**Handshake proved!!!!~n", [self()]),
 			    My_peer_id = download_manager:get_my_id(Dl_pid),
-		    My_info_hash = download_manager:get_my_info_hash(Dl_pid),
+			    My_info_hash = download_manager:get_my_info_hash(Dl_pid),
 			    Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>, <<3,2,1,3,2,1,2,3>>, My_info_hash, list_to_binary(My_peer_id)]),
 			    ok = gen_tcp:send(Socket, Msg),
 			    io:format("**portlistener~w**Min handshake skickat TILLBAKA!~n", [self()]),

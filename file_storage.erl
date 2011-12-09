@@ -53,6 +53,10 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 	{request, have, [Index], From} ->
 	    From ! {reply, have(Index, Bitfield)},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
+	{request, get_piece, [Index, Begin, _Length], From} ->
+	    Chunk_table_id = ets:lookup(Table_id, Index),
+	    From ! get_piece(Begin, Chunk_table_id),
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -98,29 +102,7 @@ generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid, Piece_sto
 
 generate_bitfield(_Acc, _Length, _Table_id, _Piece_length, _Dl_storage_pid, _Piece_storage_pid) ->
     [].
-check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc =< Piece_length ->
-    case ets:lookup(Chunk_table_id, Acc) of
-	[] ->
-	    false;
-	[{_Begin, Block, Length_of_block}] ->
-	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks ++ [<<Block:Length_of_block>>], Piece_storage_pid)
-    end;
-check_piece(_Acc, Index, Table_id,  _Chunk_table_id, _Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
-    Hash = sha:sha1raw(list_to_binary(Blocks)),
-    case mutex:request(Dl_storage_pid, compare_hash, [Index, Hash]) of
-	true ->
-	    mutex:received(Dl_storage_pid),
-	    true;
-	_What  ->
-	    mutex:received(Dl_storage_pid),
-	    ets:delete(Table_id, Index),
-	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, put_back_without_pid, [Index]),
-	    mutex:received(Dl_storage_pid),
-	    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers]),
-	    mutex:received(Piece_storage_pid),
-	    io:format("~n~nPIECE IS FAAAAAAAALSE~n~n"),
-	    error
-    end.
+
 check_piece_clean(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
@@ -195,3 +177,35 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length) when Acc < Piece_length ->
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length) ->
     access_denied.
+
+get_piece(Begin, Chunk_table_id) ->
+    case ets:lookup(Chunk_table_id, Begin) of
+	[] ->
+	    {error, false};
+	[{_Begin, Block, _Length_of_block}] ->
+	    {ok, Block}
+    end.
+
+check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc =< Piece_length ->
+    case ets:lookup(Chunk_table_id, Acc) of
+	[] ->
+	    false;
+	[{_Begin, Block, Length_of_block}] ->
+	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks ++ [<<Block:Length_of_block>>], Piece_storage_pid)
+    end;
+check_piece(_Acc, Index, Table_id,  _Chunk_table_id, _Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
+    Hash = sha:sha1raw(list_to_binary(Blocks)),
+    case mutex:request(Dl_storage_pid, compare_hash, [Index, Hash]) of
+	true ->
+	    mutex:received(Dl_storage_pid),
+	    true;
+	_What  ->
+	    mutex:received(Dl_storage_pid),
+	    ets:delete(Table_id, Index),
+	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, put_back_without_pid, [Index]),
+	    mutex:received(Dl_storage_pid),
+	    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers]),
+	    mutex:received(Piece_storage_pid),
+	    io:format("~n~nPIECE IS FAAAAAAAALSE~n~n"),
+	    error
+    end.

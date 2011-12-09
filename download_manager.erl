@@ -22,7 +22,7 @@ init(File, GUIPid) ->
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict})),
     link(Peers_pid),
-    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId()).
+    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
     Pid ! {valid_info, self(), Info_from_peer},
@@ -50,23 +50,30 @@ get_info_clean(Dl_pid) ->
 	    Reply
     end.
   
-loop(Peers_pid, Info_hash, Info_clean, My_id) ->
+loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
     receive
 	{get_clean_info, From} ->
 	    From ! {reply, Info_clean},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
 	{valid_info, From, Info_from_peer} ->
 	    From ! binary_to_list(Info_hash) =:= Info_from_peer,
-	    loop(Peers_pid, Info_hash, Info_clean, My_id);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
 	{get_id, From} ->
 	    From ! {reply, My_id},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
 	{get_my_info_hash, From} ->
 	    From ! {reply, Info_hash},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill)
+    after 10000 ->
+	    Peers_pid ! {get_downloaded, self()},
+	    receive
+		{reply, Downloaded} ->
+		    GUI_pid ! {percentage, Downloaded}
+	    end,
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid)
     end.
 
 get_torrent_data(File) ->
