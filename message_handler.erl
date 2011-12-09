@@ -26,7 +26,7 @@ init(Parent, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid)
 					    File_storage_pid,
 					    Socket, Peer_id),
     link(Msg_recver_pid),
-    Msg_sender_pid = message_sender:start(self(), Socket),
+    Msg_sender_pid = message_sender:start(Parent, self(), Socket),
     link(Msg_recver_pid),
     ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).
