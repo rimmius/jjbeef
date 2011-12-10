@@ -68,25 +68,6 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
-	{send_handshake, From, {Host, Port, Info, Peer_id}} ->
-	    case length(Children) > 50 of
-		true ->
-		    From ! {error, no_more_peers},
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
-		_ ->
-		    My_pid = self(),
-		    Hs_pid = spawn(fun() ->connect_and_handshake:start(Host, Port, Info, Peer_id, My_pid) end),
-		    receive
-			{reply, ok, Sock} ->
-			    From ! {reply, ok, Sock};
-			{error, Reason} ->
-			    From ! {error, Reason}
-		    after 5000 ->
-			    From ! {error, timeout},
-			    exit(Hs_pid, kill)
-		    end,
-		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
-	    end;
 	{update_interest, Index} ->
 	    update_interest(Children, Index),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
@@ -183,12 +164,16 @@ convert_to_ip([H|T], New_list) ->
     end.
 
 send_handshake(Host, Port, Info, Peer_id, Peers_pid, Dl_pid) ->
-    Peers_pid ! {send_handshake, self(), {Host, Port, Info, Peer_id}},
+    My_pid = self(),
+    Hs_pid = spawn(fun() ->connect_and_handshake:start(Host, Port, Info, Peer_id, My_pid) end),
     receive
 	{reply, ok, Sock} ->
 	    spawn(fun() -> recv_loop(Sock, Dl_pid, Host, Port, Peers_pid) end),
 	    Sock;
-	{error, _} ->
+	{error, _Reason} ->
+	    error
+    after 5000 ->
+	    exit(Hs_pid, kill),
 	    error
     end.
 
@@ -209,6 +194,7 @@ recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
 			     Peer_id},
 		    receive
 			{reply, Pid_h, ok} ->
+			    io:format("~n~nGot handshake back from tracker_peer~n"),
 			    insert_valid_peer(Peers_pid, Peer_id, Socket, 
 					      Host, Port);
 			{reply, Pid_h, drop_connection} ->

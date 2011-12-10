@@ -90,7 +90,7 @@ init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storag
     link(Msg_handler_pid),
     io:format("msg_handler started~n"),
 
-    {ok, Uploader_pid} = piece_uploader:start(self(), File_storage_pid, Msg_handler_pid),
+    {ok, Uploader_pid} = piece_uploader:start_link(self(), File_storage_pid, Msg_handler_pid),
     link(Uploader_pid),
     
     {ok, am_choked_uninterested, #state{parent = Parent,

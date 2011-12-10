@@ -71,6 +71,7 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive
 		{reply, Downloaded} ->
+		    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
 		    GUI_pid ! {percentage, Downloaded}
 	    end,
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid)

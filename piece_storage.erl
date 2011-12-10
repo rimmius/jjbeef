@@ -11,7 +11,7 @@ start(List) ->
 
 init(List) ->
     Tid = initiate_table(List),
-    loop(Tid, length(List) - 1).
+    loop(Tid, length(List)).
 
 
 initiate_table(List) ->
@@ -90,10 +90,10 @@ get_rarest_again(Tid,PeerId,Index,Nr_of_pieces)->
     RarestList = kick_out(Index,L),
     get_rarest_index_inner(Tid,PeerId,RarestList).
     
-kick_out(Index,[H|T])->
-    case Index =:= H of
+kick_out(Index,[{Index_2, Peers}|T])->
+    case Index =:= Index_2 of
 	false->
-	    [H|kick_out(Index,T)];
+	    [{Index_2, Peers}|kick_out(Index,T)];
 	true ->
 	    T
     end;
