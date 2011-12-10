@@ -151,7 +151,7 @@ am_unchoked_interested_unrequested(timeout, State) ->
 		    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% with 100 s timeout, wait for complete/incomplete
-		    {next_state, am_unchoked_interested_requested, State, 100000};
+		    {next_state, am_unchoked_interested_requested, State, 200000};
 		access_denied ->
 		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 		    {next_state, am_unchoked_interested_unrequested, State, 0}
@@ -162,6 +162,11 @@ am_unchoked_interested_unrequested(timeout, State) ->
     end.
 
 %% state 3-2
+am_unchoked_interested_requested(am_choked, State) ->
+    {next_state, am_choked_interested, State, 120000};
+am_unchoked_interested_requested(am_unchoked, State) ->
+	%% problem domain
+    {next_state, am_unchoked_interested_requested, State, 200000};	
 am_unchoked_interested_requested({piece_complete, Index}, State) ->
     io:format("**piece_requester~w**  piece_complete received by piece_requester~n", [self()]),
     peers:notice_have(State#state.parent, Index),
@@ -177,7 +182,7 @@ am_unchoked_interested_requested({piece_incomplete, Index}, State) ->
 	    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    %% with 100 s timeout, wait for complete/incomplete
-	    {next_state, am_unchoked_interested_requested, State, 100000};
+	    {next_state, am_unchoked_interested_requested, State, 200000};
 	access_denied ->
 	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 	    {next_state, am_unchoked_interested_unrequested, State, 0}
@@ -201,7 +206,7 @@ am_unchoked_interested_requested({piece_error, Old_index}, State) ->
 		    io:format("**piece_requester~w** Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% with 100 s timeout, wait for complete/incomplete
-		    {next_state, am_unchoked_interested_requested, State, 100000};
+		    {next_state, am_unchoked_interested_requested, State, 200000};
 		access_denied ->
 		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 		    {next_state, am_unchoked_interested_unrequested, State, 0}
