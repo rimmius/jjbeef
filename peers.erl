@@ -79,8 +79,8 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    From ! {reply, 0},
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
-		    Perc = (Length / How_much) * 100,
-		    From ! {reply, Perc},
+		    %%Perc = (Length / How_much) * 100,
+		    From ! {reply, 0},
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
 	    end;
 	{'EXIT', Peer_storage_pid, Reason} -> 
@@ -97,21 +97,22 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
 	    io:format("~n~nChild crashed!!!!!!!!!!!!!~w~n~n", [Child]),
-	    case mutex:request(Dl_storage_pid, put_back, [Child]) of
+	    case mutex:request(Dl_storage_pid, put_back_with_only_pid, [Child]) of
 		[] ->
 		    io:format("~n~nTHAT PEER DID NOT HAVE A PIECE ~n~n"),
 		    mutex:received(Dl_storage_pid);
-		{Index, {Hash, Peers_piece}} ->	
+		List ->	
 		    io:format("~n~nTHAT PEER HAD A PIECE~n~n"),
 		    mutex:received(Dl_storage_pid),
-		    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers_piece]),
+		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
+		    mutex:received(File_storage_pid),
+		    mutex:request(Piece_storage_pid, put_pieces_back, [New_list]),
 		    mutex:received(Piece_storage_pid),
 		    io:format("~n~n~nmoved back that piece~n~n")
 	    end,
 	    New_children = removeChild(Child, Children, []),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
     end.
-
 removeChild(_Child, [], New_children) ->
     New_children;
 removeChild(Child, [{Pid, Socket}|T], New_children) ->

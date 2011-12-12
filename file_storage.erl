@@ -7,6 +7,7 @@ start(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage
     spawn(?MODULE, init, [Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid]).
 
 init(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
+    io:format("~n~nPiece_length=~w~n~n", [Piece_length]),
     Data = initiate_data(0, Length),
     Table_id = ets:new(torrent, [ordered_set]),
     loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid).
@@ -25,7 +26,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 	    Reply = strip_bitfield(Bitfield, 0, Length),
 	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
-	{request, insert_chunk, [Index, Begin, Block, Block_length], From} ->
+	{request, insert_chunk, [The_pid, Index, Begin, Block, Block_length], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
 		    Chunk_table_id = ets:new(piece, [ordered_set]),
@@ -34,7 +35,9 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 		[{Index, Chunk_table_id}] ->
 		    ets:insert(Chunk_table_id, {Begin, Block, Block_length})
 	    end,
-	    Check_piece = check_piece(0, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, "", Piece_storage_pid),
+	     
+	    Check_piece = check_piece(0, The_pid, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, <<>>, Piece_storage_pid),
+	   
 	    From ! {reply, Check_piece},
 	    case Check_piece of
 		true ->
@@ -66,6 +69,9 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 	    Chunk_table_id = ets:lookup(Table_id, Index),
 	    From ! get_piece(Begin, Chunk_table_id),
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
+	{request, check_piece, [List], From} ->
+	    From ! {reply, pieces_to_remove(Table_id, List, Dl_storage_pid, Piece_length, Piece_storage_pid)},
+	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid);
 	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
@@ -78,6 +84,20 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_
 	    end,
 	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid)
+    end.
+pieces_to_remove(_Table_id, [], _Dl_storage_pid, _Piece_length, _Piece_storage_pid) ->
+    [];
+pieces_to_remove(Table_id, [{Index, {Hash, Peers}}|T], Dl_storage_pid, Piece_length, Piece_storage_pid) ->
+    case ets:lookup(Table_id, Index) of
+	[] ->
+	    [{Index, {Hash, Peers}}|pieces_to_remove(Table_id, T, Dl_storage_pid, Piece_length, Piece_storage_pid)];
+	[{Index, Chunk_table_id}] ->
+	    case check_piece_clean(0, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, "", Piece_storage_pid) of
+		0 ->
+		    [{Index, {Hash, Peers}}|pieces_to_remove(Table_id, T, Dl_storage_pid, Piece_length, Piece_storage_pid)];
+		1  ->
+		    pieces_to_remove(Table_id, T, Dl_storage_pid, Piece_length, Piece_storage_pid)
+	    end
     end.
 full_length([]) ->
     0;
@@ -188,19 +208,33 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length) wh
 	    io:format("~n~nIndex=~w~n~n", [Index]),
 	    case Index =:= Last_piece of
 		true ->
-		    io:format("~nREQUESTING LAST PIECE~n~n"),
-		    Last_piece_length = Full_length rem 131072,
-		    last_piece_req(Acc, Index, Last_piece_length);
+		    io:format("~nREQUESTING ON LAST PIECE~n~n"),
+		    Last_piece_length = Full_length rem Piece_length,
+		    Last_chunk = Last_piece_length rem 16384,
+		    Last_chunk_req = Last_piece_length - Last_chunk,
+		    last_piece_req(Acc, Chunk_table_id, Index, Last_piece_length, Last_chunk, Last_chunk_req);
 		_ ->
-		    {Acc, 131072}
+		    {Acc, 16384}
 	    end;
 	[{_Begin, _Block, Length_of_block}] ->
 	    what_chunk(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length, _Last_piece, _Full_length) ->
     access_denied.
-last_piece_req(Acc, _Index, Last_piece_length)  ->
-    {Acc, Last_piece_length}.
+last_piece_req(Acc, Chunk_table_id,  Index, Last_piece_length, Last_chunk, Last_chunk_req) when Acc < Last_piece_length  ->
+    case ets:lookup(Chunk_table_id, Acc) of
+	[] ->
+	    case Acc =:= Last_chunk_req of
+		true ->
+		    {Acc, Last_chunk};
+		_ ->
+		    {Acc, 16384}
+	    end;
+	[{_Begin, _Block, Length_of_block}] ->
+	    last_piece_req(Acc+Length_of_block, Chunk_table_id, Index, Last_piece_length, Last_chunk, Last_chunk_req)
+    end;
+last_piece_req(_Acc, _Chunk_Table_id, _Index, _Last_piece_length, _Last_chunk, _Last_chunk_req) ->
+    access_denied.
 get_piece(Begin, Chunk_table_id) ->
     case ets:lookup(Chunk_table_id, Begin) of
 	[] ->
@@ -209,24 +243,17 @@ get_piece(Begin, Chunk_table_id) ->
 	    {ok, Block}
     end.
 
-check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc < Piece_length ->
+check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    false;
 	[{_Begin, Block, Length_of_block}] ->
-	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, 
-			Dl_storage_pid, Blocks ++ [Block], Piece_storage_pid)
+	    check_piece(Acc+Length_of_block, The_pid, Index, Table_id, Chunk_table_id, Piece_length, 
+			Dl_storage_pid, list_to_binary([Blocks, <<Block:Length_of_block>>]), Piece_storage_pid)
     end;
-check_piece(_Acc, Index, Table_id,  _Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
-    case Piece_length of
-	16384 ->
-	    Piece_length_real = 131072;
-	_ ->
-	    Piece_length_real = Piece_length
-    end,
-    Block_binary = binary_to_list(<<Blocks:Piece_length_real>>),  
-    Hash = sha:sha1raw(list_to_binary(Block_binary)),
-    case mutex:request(Dl_storage_pid, compare_hash, [Index, Hash]) of
+check_piece(_Acc, The_pid, Index, Table_id,  _Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
+    Hash = sha:sha1raw(Blocks),
+    case mutex:request(Dl_storage_pid, compare_hash, [The_pid, Index, Hash]) of
 	true ->
 	    mutex:received(Dl_storage_pid),
 	    true;
@@ -234,7 +261,7 @@ check_piece(_Acc, Index, Table_id,  _Chunk_table_id, Piece_length, Dl_storage_pi
 	    io:format("~n~nWHAT=~w~n~n", [What]),
 	    mutex:received(Dl_storage_pid),
 	    ets:delete(Table_id, Index),
-	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, put_back_without_pid, [Index]),
+	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, put_back, [The_pid, Index]),
 	    mutex:received(Dl_storage_pid),
 	    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, Peers]),
 	    mutex:received(Piece_storage_pid),

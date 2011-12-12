@@ -48,6 +48,9 @@ loop(Tid, Nr_of_pieces)->
 		put_piece_back ->
 		    [Index, Hash, Peers]=Args,
 		    Reply = put_piece_back(Tid, Index, Hash, Peers);
+		put_pieces_back ->
+		    [List] = Args,
+		    Reply = put_pieces_back(Tid,List);
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(Tid, PeerId, Nr_of_pieces),
@@ -84,6 +87,13 @@ delete_piece(Tid, Index) ->
 
 put_piece_back(Tid, Index, Hash, Peers)->
     ets:insert(Tid, {Index, {Hash, Peers}}).
+
+put_pieces_back(Tid,[{Index,{Hash,Peers}}|T])->
+    ets:insert(Tid,{Index,{Hash,Peers}}),
+    put_pieces_back(Tid,T);
+put_pieces_back(_Tid,[]) ->
+    has_inserted_all.
+
 
 get_rarest_again(Tid,PeerId,Index,Nr_of_pieces)->
     L = get_rarest(Tid,0,Nr_of_pieces,[]),
