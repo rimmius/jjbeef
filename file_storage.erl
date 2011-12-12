@@ -147,7 +147,7 @@ write_to_file(_Table_id, _Acc, _Length, _Io, _Piece_length) ->
 write_out_chunks(Chunk_table_id, Acc, Piece_length, Io) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
-	    write_out_chunks(Chunk_table_id, Acc+16384, Piece_length, Io);
+	    write_out_chunks(Chunk_table_id, Acc+131072, Piece_length, Io);
 	    %%ok;
 	[{Acc, Chunk, Block_length}] ->
 	    file:write(Io, <<Chunk:Block_length>>),
@@ -189,27 +189,18 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length) wh
 	    case Index =:= Last_piece of
 		true ->
 		    io:format("~nREQUESTING LAST PIECE~n~n"),
-		    Last_piece_length = Full_length rem Piece_length,
-		    Last_chunk = Last_piece_length rem 16384,
-		    Req_last = Full_length - Last_chunk,
-		    last_piece_req(Acc, Index, Req_last, Last_piece_length, Last_chunk);
+		    Last_piece_length = Full_length rem 131072,
+		    last_piece_req(Acc, Index, Last_piece_length);
 		_ ->
-		    {Acc, 16384}
+		    {Acc, 131072}
 	    end;
-	[{_Begin, _Block, Block_length}] ->
-	    what_chunk(Acc+Block_length, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
+	[{_Begin, _Block, Length_of_block}] ->
+	    what_chunk(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length, _Last_piece, _Full_length) ->
     access_denied.
-last_piece_req(Acc, _Index, Req_last, Last_piece_length, Last_chunk) when Acc < Req_last  ->
-    case Last_piece_length >= 16384 of
-	true ->
-	    {Acc, 16384};
-	_ ->
-	    {Acc, Last_chunk}
-    end;
-last_piece_req(Acc, _Index, _Req_last, _Last_piece_length, Last_chunk) ->
-    {Acc, Last_chunk}.
+last_piece_req(Acc, _Index, Last_piece_length)  ->
+    {Acc, Last_piece_length}.
 get_piece(Begin, Chunk_table_id) ->
     case ets:lookup(Chunk_table_id, Begin) of
 	[] ->
@@ -218,15 +209,23 @@ get_piece(Begin, Chunk_table_id) ->
 	    {ok, Block}
     end.
 
-check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc =< Piece_length ->
+check_piece(Acc, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
 	[] ->
 	    false;
 	[{_Begin, Block, Length_of_block}] ->
-	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, Dl_storage_pid, Blocks ++ [<<Block:Length_of_block>>], Piece_storage_pid)
+	    check_piece(Acc+Length_of_block, Index, Table_id, Chunk_table_id, Piece_length, 
+			Dl_storage_pid, Blocks ++ [Block], Piece_storage_pid)
     end;
-check_piece(_Acc, Index, Table_id,  _Chunk_table_id, _Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
-    Hash = sha:sha1raw(list_to_binary(Blocks)),
+check_piece(_Acc, Index, Table_id,  _Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->
+    case Piece_length of
+	16384 ->
+	    Piece_length_real = 131072;
+	_ ->
+	    Piece_length_real = Piece_length
+    end,
+    Block_binary = binary_to_list(<<Blocks:Piece_length_real>>),  
+    Hash = sha:sha1raw(list_to_binary(Block_binary)),
     case mutex:request(Dl_storage_pid, compare_hash, [Index, Hash]) of
 	true ->
 	    mutex:received(Dl_storage_pid),

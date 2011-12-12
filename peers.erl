@@ -79,7 +79,7 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    From ! {reply, 0},
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
-		    Perc = (Length div How_much) * 100,
+		    Perc = (Length / How_much) * 100,
 		    From ! {reply, Perc},
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
 	    end;
