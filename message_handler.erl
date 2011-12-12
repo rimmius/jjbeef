@@ -20,13 +20,14 @@ start(Parent, Socket, Peer_id,
 %%done
 init(Parent, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
     io:format("~nmsg handler goes receiving!~n"),
+    process_flag(trap_exit, true),
     Msg_recver_pid = message_receiver:start(Parent, self(), 
 					    Peer_mutex_pid,
 					    Piece_mutex_pid, 
 					    File_storage_pid,
 					    Socket, Peer_id),
     link(Msg_recver_pid),
-    Msg_sender_pid = message_sender:start(Parent, self(), Socket),
+    Msg_sender_pid = message_sender:start(self(), Socket),
     link(Msg_recver_pid),
     ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).
@@ -75,5 +76,9 @@ loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
 	{error, Msg_sender_pid} ->
 	    gen_tcp:close(Socket),
 	    io:format("*****EXIT*****socket successfully closed, going to exit~n"),
-	    exit(self(), kill)	
+	    exit(self(), kill);
+	{'EXIT', _Pid, _Reason} ->
+	    gen_tcp:close(Socket),
+	    io:format("*****EXIT*****socket successfully closed, going to exit~n"),
+	    exit(self(), kill)
     end.

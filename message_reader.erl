@@ -57,7 +57,7 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
 	    mutex:received(Peer_mutex_pid);
 	{piece, [Index, Begin, Block, Block_len]} ->
-	    Is_complete = mutex:request(File_storage_pid, insert_chunk, [Index, Begin, Block, Block_len]),
+	    Is_complete = mutex:request(File_storage_pid, insert_chunk, [Grandparent, Index, Begin, Block, Block_len]),
 	    mutex:received(File_storage_pid),
 	    piece_requester:send_event(Grandparent, piece, {Is_complete, Index});
 	{request, [_Index, _Begin, _Length]} ->

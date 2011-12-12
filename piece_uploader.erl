@@ -39,9 +39,9 @@ send_event(Pid, is_interested, Arg) ->
     case Arg of
 	true -> gen_fsm:send_event(Pid, is_interested);
 	false -> gen_fsm:send_event(Pid, is_not_interested)
-    end;
-send_event(Pid, is_choked, Arg) ->
-    gen_fsm:send_all_state_event(Pid, {is_choked, Arg}).
+    end.
+%%send_event(Pid, is_choked, Arg) ->
+%%    gen_fsm:send_all_state_event(Pid, {is_choked, Arg}).
 
 %%%===================================================================
 %%% gen_fsm callbacks
@@ -64,6 +64,7 @@ init([Piece_requester_pid, File_storage_pid, Msg_handler_pid]) ->
     My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
     mutex:received(File_storage_pid),
     message_handler:send(Msg_handler_pid, bitfield, My_bitfield_in_list),
+    message_handler:send(Msg_handler_pid, choke, []),
     io:format("my bitfiled sent~n"),
     {ok, is_choked_uninterested, #state{piece_requester = Piece_requester_pid,
 					file_storage = File_storage_pid,
@@ -87,7 +88,7 @@ init([Piece_requester_pid, File_storage_pid, Msg_handler_pid]) ->
 is_choked_uninterested(is_interested, State) ->
     message_handler:send(State#state.msg_handler, unchoke, []),
     io:format("~n**piece_uploader~w** unchoke da peer~n", [self()]),
-    {next_state, is_choked_interested, State};
+    {next_state, is_unchoked_interested, State};
 is_choked_uninterested(is_not_interested, State) ->
     {next_state, is_choked_uninterested, State}.
 
@@ -119,7 +120,7 @@ is_unchoked_uninterested(is_interested, State) ->
 is_unchoked_uninterested(is_not_interested, State) ->
     message_handler:send(State#state.msg_handler, choke, []),
     io:format("~n**piece_uploader~w** choke da peer~n", [self()]),
-    {next_state, is_unchoked_uninterested, State}.
+    {next_state, is_choked_uninterested, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -156,15 +157,9 @@ state_name(_Event, _From, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_event({is_choked, Arg}, StateName, State) ->
-    NewStateName = case {StateName, Arg} of
-		       {is_unchoked_interested, true} -> is_choked_interested;
-		       {is_unchoked_uninterested, true} -> is_choked_uninterested;
-		       {is_choked_interested, false} -> is_unchoked_interested;
-		       {is_choked_uninterested, false} -> is_unchoked_uninterested;
-		       {_OtherState, _} -> StateName
-		   end,
-    {next_state, NewStateName, State}.
+handle_event(_Event, StateName, State) ->
+    {next_state, StateName, State}.
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc

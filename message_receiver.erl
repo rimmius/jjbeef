@@ -17,6 +17,7 @@ start(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 
 init(Grandparent, Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
      Socket, Peer_id) ->
+    process_flag(trap_exit, true),
     Msg_reader_pid = message_reader:start(Grandparent, 
 					  Peer_mutex_pid, Piece_mutex_pid, File_storage_pid,
 					  Peer_id),
@@ -31,7 +32,12 @@ loop(Parent, Socket, Msg_reader_pid) ->
     receive
 	start_receiving ->
 	    do_recv(Parent, Socket, Msg_reader_pid),
-	    loop(Parent, Socket, Msg_reader_pid)
+	    loop(Parent, Socket, Msg_reader_pid);
+	{'EXIT', Pid, Reason} ->
+	    io:format("~n~n*****EXIT***** msg_recver ~w's child: ~w exits~n", [self(), Pid]),
+	    gen_tcp:close(Socket),
+	    io:format("~n*****EXIT*****socket successfully closed, going to exit~n"),
+	    message_handler:error(Parent, self())
     end.
 
 do_recv(Parent, Socket, Msg_reader_pid) ->    
@@ -65,7 +71,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_reader:read_msg(Msg_reader_pid, is_interested, [0]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+		    io:format("~n*****~w*****HALFWAY message receiving error: ~w~n", [self(), Reason]),
 		    message_handler:error(Parent, self())
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
@@ -76,7 +82,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_reader:read_msg(Msg_reader_pid, have, [Piece_index]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+		    io:format("~n*****~w*****HALFWAY message receiving error: ~w~n", [self(), Reason]),
 		    message_handler:error(Parent, self())
 	    end;
 	%% do_recv(Socket, Pid_message_reader);
@@ -95,7 +101,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_reader:read_msg(Msg_reader_pid, cancel, [Index, Begin, Length]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+		    io:format("~n*****~w*****HALFWAY message receiving error: ~w~n", [self(), Reason]),
 		    message_handler:error(Parent, self())
 	    end;
 				  %% do_recv(Socket, Pid_message_reader);
@@ -108,7 +114,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_reader:read_msg(Msg_reader_pid, port, [Listen_port]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+		    io:format("~n*****~w*****HALFWAY message receiving error: ~w~n", [self(), Reason]),
 		    message_handler:error(Parent, self())
 	    end;
 	   %% do_recv(Socket, Pid_message_reader);
@@ -130,7 +136,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    message_reader:read_msg(Msg_reader_pid, piece, [Index, Begin, Block, Block_len]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
-		    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+		    io:format("~n*****~w*****HALFWAY message receiving error: ~w~n", [self(), Reason]),
 		    message_handler:error(Parent, self())
 	    end;
 	    %%do_recv(Socket, Pid_message_reader);
@@ -139,7 +145,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    message_handler:error(Parent, self());
 	    %%do_recv(Socket, Pid_message_reader); %% not sure
 	{error, Reason} ->
-	    io:format("~n*****~w*****message receiving error: ~w~n", [self(), Reason]),
+	    io:format("~n*****~w*****INITIALmessage receiving error: ~w~n", [self(), Reason]),
 	    message_handler:error(Parent, self());	    
 	_ ->
 	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n"),

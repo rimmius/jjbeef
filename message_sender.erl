@@ -1,32 +1,32 @@
 -module(message_sender).
--export([start/3, send/3]).
--export([loop/3, do_send/4]).
+-export([start/2, send/3]).
+-export([loop/2, do_send/3]).
 
-start(Grandparent, Parent, Socket) ->
-    spawn(?MODULE, loop, [Grandparent, Parent, Socket]).
+start(Parent, Socket) ->
+    spawn(?MODULE, loop, [Parent, Socket]).
 
 send(Pid, Type, Msg) ->
     Pid ! {do_send, Type, Msg},
     ok.
 
-loop(Grandparent, Parent, Socket) ->
+loop(Parent, Socket) ->
     receive
 	{do_send, Type, Msg} ->
-	    do_send(Grandparent, Socket, Type, Msg),
+	    do_send(Socket, Type, Msg),
 	    message_handler:done(Parent),
-	    loop(Grandparent, Parent, Socket)
+	    loop(Parent, Socket)
     end.
 
-do_send(Grandparent, Socket, Type, Msg) ->
+do_send(Socket, Type, Msg) ->
     case {Type, Msg} of 
 	{keep_alive, _} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,0>>);
 	{choke, _} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,0>>),
-	    piece_uploader:send_event(Grandparent, is_choked, true);
+	    ok = gen_tcp:send(Socket, <<0,0,0,1,0>>);
+	   %%  piece_uploader:send_event(Grandparent, is_choked, true);
 	{unchoke, _} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,1>>),
-	    piece_uploader:send_event(Grandparent, is_choked, false);
+	    ok = gen_tcp:send(Socket, <<0,0,0,1,1>>);
+	   %%  piece_uploader:send_event(Grandparent, is_choked, false);
 	{am_interested, true} ->
 	    ok = gen_tcp:send(Socket, <<0,0,0,1,2>>);
 	{am_interested, false} ->
