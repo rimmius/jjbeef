@@ -3,14 +3,14 @@
 -module(file_storage).
 -export([start/6, init/6, full_length/1]).
 
-start(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
-    spawn(?MODULE, init, [Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid]).
+start(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid) ->
+    spawn(?MODULE, init, [Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid]).
 
-init(Dl_storage_pid, Files, Length, Piece_length, Length_in_list, Piece_storage_pid) ->
+init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid) ->
     io:format("~n~nPiece_length=~w~n~n", [Piece_length]),
-    Data = initiate_data(0, Length),
+    Data = initiate_data(0, length(List_of_pieces)),
     Table_id = ets:new(torrent, [ordered_set]),
-    loop(Dl_storage_pid, Files, Data, Table_id, Length, Piece_length, Length_in_list, Piece_storage_pid).
+    loop(Dl_storage_pid, Files, Data, Table_id, length(List_of_pieces), Piece_length, Length_in_list, Piece_storage_pid).
 
 initiate_data(Nr, Length) when Nr =< Length ->
     [{0, Nr}|initiate_data(Nr+1, Length)];
@@ -217,7 +217,7 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length) wh
 		    {Acc, 16384}
 	    end;
 	[{_Begin, _Block, Length_of_block}] ->
-	    what_chunk(Acc+Length_of_block, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
+	    what_chunk(Acc+(Length_of_block div 8), Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
     end;
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length, _Last_piece, _Full_length) ->
     access_denied.
@@ -231,7 +231,7 @@ last_piece_req(Acc, Chunk_table_id,  Index, Last_piece_length, Last_chunk, Last_
 		    {Acc, 16384}
 	    end;
 	[{_Begin, _Block, Length_of_block}] ->
-	    last_piece_req(Acc+Length_of_block, Chunk_table_id, Index, Last_piece_length, Last_chunk, Last_chunk_req)
+	    last_piece_req(Acc+(Length_of_block div 8), Chunk_table_id, Index, Last_piece_length, Last_chunk, Last_chunk_req)
     end;
 last_piece_req(_Acc, _Chunk_Table_id, _Index, _Last_piece_length, _Last_chunk, _Last_chunk_req) ->
     access_denied.
@@ -248,7 +248,7 @@ check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length, Dl_stor
 	[] ->
 	    false;
 	[{_Begin, Block, Length_of_block}] ->
-	    check_piece(Acc+Length_of_block, The_pid, Index, Table_id, Chunk_table_id, Piece_length, 
+	    check_piece(Acc+(Length_of_block div 8), The_pid, Index, Table_id, Chunk_table_id, Piece_length, 
 			Dl_storage_pid, list_to_binary([Blocks, <<Block:Length_of_block>>]), Piece_storage_pid)
     end;
 check_piece(_Acc, The_pid, Index, Table_id,  _Chunk_table_id, Piece_length, Dl_storage_pid, Blocks, Piece_storage_pid) ->

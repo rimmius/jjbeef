@@ -18,7 +18,7 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Len
     link(Piece_storage_pid),
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
-    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, length(List_of_pieces), Piece_length, Length_in_list, Piece_storage_pid]),
+    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid]),
     link(File_storage_pid),
 
     Peers_pid = self(),
