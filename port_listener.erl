@@ -19,52 +19,24 @@ listen(Port, Dl_pid, Parent) ->
     accept(LSocket, Dl_pid, Parent).
 
 accept(LSocket, Dl_pid, Parent) ->
-    {ok, Socket} = gen_tcp:accept(LSocket) ,
+    {ok, Socket} = gen_tcp:accept(LSocket),
     spawn(fun() -> recv(Socket, Dl_pid, Parent) end),
     accept(LSocket, Dl_pid, Parent).
 
 
 recv(Socket, Dl_pid, Parent) ->
-    case gen_tcp:recv(Socket, 20) of
-	{ok, <<19, "BitTorrent protocol">>} ->
-	    case gen_tcp:recv(Socket, 48) of
-		{ok, <<Reserved:64,
-		       Info_hash:160,
-		       Peer_id:160>>} ->
-		    %% Handshake reader
-		    %% --------------------------	
-		    io:format("**portlistener~w**Got Handshake! handshanke_handler started~n", [self()]),
-		    Pid_h = handshake_handler:start(Dl_pid),
-		    Pid_h ! {handshake, self(), Reserved, <<Info_hash:160>>, Peer_id},
-		    receive 
-			{reply, Pid_h, ok} ->
-			    io:format("**portlistener~w**Handshake proved!!!!~n", [self()]),
-			    My_peer_id = download_manager:get_my_id(Dl_pid),
-			    My_info_hash = download_manager:get_my_info_hash(Dl_pid),
-			    Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>, <<3,2,1,3,2,1,2,3>>, My_info_hash, list_to_binary(My_peer_id)]),
-			    ok = gen_tcp:send(Socket, Msg),
-			    io:format("**portlistener~w**Min handshake skickat TILLBAKA!~n", [self()]),
-			    
-			    %% ----------------------
-			    
-			    ok = peers:insert_valid_peer(Parent, Peer_id, Socket),
-			    io:format("**portlistener~w**Handshaken, I'm waiting for message~n", [self()]);
-			%%  receive
-			%%{reply, Pid_m, Reply} ->
-			%%io:format("MSG hdler reply: ~w~n", [Reply])
-			%%  end,
-		    
-			%% -------------------------
-			%% recv_loop(Socket, Dl_pid);
-			{reply, _Pid_h, drop_connection} ->
-			    gen_tcp:close(Socket)
-		    end
-	    end;
-	   
-	{ok, _Data} ->	
-	    ok;
-	{error, Reason} ->
-	    io:format("FYfAN: ~w~n", [Reason]),
-	    ok
-    end.
+    My_peer_id = download_manager:get_my_id(Dl_pid),
+    My_info_hash = download_manager:get_my_info_hash(Dl_pid),
 
+    case handshake_handler:recv_handshake(Socket, My_info_hash, port_listener) of
+	{ok, {Socket, Peer_id}} ->
+	    case handshake_handler:send_handshake({socket, Socket}, My_info_hash, My_peer_id, port_listener) of
+		{ok, Socket} ->
+		    ok = peers:insert_valid_peer(Parent, Peer_id, Socket),    
+		    io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");
+		{error, Reason} ->
+		    io:format("~n***Port_listener~w error** reason: ~w~n", [self(), Reason])
+	    end;
+	{error, Reason} ->
+	    io:format("~n***Port_listener~w error** reason: ~w~n", [self(), Reason])
+    end.
