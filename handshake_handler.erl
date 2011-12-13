@@ -7,17 +7,17 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(handshake_handler).
--export([send_handshake/4, recv_handshake/3]).
+-export([send_handshake/3, recv_handshake/2]).
 
-send_handshake({ip, Host, Port}, My_info_hash, My_peer_id, From) ->    
+send_handshake({ip, Host, Port}, My_info_hash, My_peer_id) ->    
     case gen_tcp:connect(Host, Port, [binary, {active, false},
 				      {packet, 0}], 1000) of
 	{ok, Socket} ->	   	   
-	    send_handshake({socket, Socket}, My_info_hash, My_peer_id, From);
+	    send_handshake({socket, Socket}, My_info_hash, My_peer_id);
 	{error, Reason} ->
 	    {error, Reason}
     end;
-send_handshake({socket, Socket}, My_info_hash, My_peer_id, From) ->
+send_handshake({socket, Socket}, My_info_hash, My_peer_id) ->
     Msg = list_to_binary([<<19>>,<<"BitTorrent protocol">>,
 			  <<3,2,1,3,2,1,2,3>>, My_info_hash,
 			  list_to_binary(My_peer_id)]),
@@ -28,7 +28,7 @@ send_handshake({socket, Socket}, My_info_hash, My_peer_id, From) ->
 	    {error, Reason}
     end.
 
-recv_handshake(Socket, My_info_hash, From) ->
+recv_handshake(Socket, My_info_hash) ->
     case gen_tcp:recv(Socket, 20) of
 	{ok, <<19, "BitTorrent protocol">>} ->
 	    case gen_tcp:recv(Socket, 48) of
