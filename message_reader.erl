@@ -47,16 +47,18 @@ loop(Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_
 		false -> ok %% noting to do
 	    end;
 	{am_choked, [Arg]} ->
-	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, choke, Arg]),
-	    mutex:received(Peer_mutex_pid),
+	    %% mutex:request(Peer_mutex_pid, update_peer, [Peer_id, choke, Arg]),
+	    %% mutex:received(Peer_mutex_pid),
 	    piece_requester:send_event(Requester_pid, am_choked, Arg);	
 	{is_interested, [Arg]} ->
-	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, interested, Arg]),
-	    mutex:received(Peer_mutex_pid),
+	    %% mutex:request(Peer_mutex_pid, update_peer, [Peer_id, interested, Arg]),
+	    %% mutex:received(Peer_mutex_pid),
 	    piece_uploader:send_event(Uploader_pid, is_interested, Arg);
-	{port, [Listen_port]} ->
-	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
-	    mutex:received(Peer_mutex_pid);
+	{port, [_Listen_port]} ->
+	    %% mutex:request(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
+	    %% mutex:received(Peer_mutex_pid);
+	    %% TODO
+	    ok;
 	{piece, [Index, Begin, Block, Block_len]} ->
 	    Is_complete = mutex:request(File_storage_pid, insert_chunk, [Requester_pid, Index, Begin, Block, Block_len]),
 	    mutex:received(File_storage_pid),
