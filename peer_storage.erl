@@ -26,11 +26,24 @@
 
 start() ->
     spawn(?MODULE, init, []).
- 
+
+%%--------------------------------------------------------------------
+%% Function:init/0
+%% Purpose: create an ets table for peer info storage
+%% Args:empty
+%% Returns: TableId of peer table
+%%-------------------------------------------------------------------- 
 init() ->
     Tid = ets:new(peer_table, [{keypos, #peer.peerid}]),
     loop(Tid).
 
+%%--------------------------------------------------------------------
+%% Function:loop/1
+%% Purpose: receive requests from peer mutex about what functions to
+%%          execute
+%% Args:  TableID of peer table
+%% Returns: the requested information
+%%--------------------------------------------------------------------
 loop(Tid) ->
     receive
 	{request, Function, Args, From}->
@@ -57,14 +70,22 @@ loop(Tid) ->
 	    loop(Tid);
 	stop -> ok
     end.
-
-%% insert peer for the first time.
+ 
+%%--------------------------------------------------------------------
+%% Function: insert_new_peer/6
+%% Purpose: insert peer for the first time.
+%% Args: TableId of peer table, Ip, PeerId, Socket, Port and Request
+%%--------------------------------------------------------------------
 insert_new_peer(Tid, Ip, PeerId, Socket, Port, Request) -> 
     ets:insert(Tid, #peer{peerid = PeerId, interested = 0, choke = 1,
 			  ip = Ip, socket = Socket, port = Port,
 			  request = Request}).
 
-%% update certain peer fields
+%%--------------------------------------------------------------------
+%% Function: update_peer/4
+%% Purpose: update certain peer fields
+%% Args: TableId of peer table, PeerId,the field to be updated, the new value
+%%--------------------------------------------------------------------
 update_peer(Tid, PeerId, Field, Value) ->
     case Field of
 	interested -> 
@@ -104,11 +125,20 @@ update_peer(Tid, PeerId, Field, Value) ->
 					port = Port, request = Value})
     end.
 
-%% delete a peer 
+%%--------------------------------------------------------------------
+%% Function: delete_peer/2
+%% Purpose: delete a peer from the peer table
+%% Args: tableId of the peer table, PeerId
+%%--------------------------------------------------------------------
 delete_peer(Tid, PeerId)->
     ets:delete(Tid, PeerId).
 
-%% read certain peer fields and return their value
+%%--------------------------------------------------------------------
+%% Function: read_field/3
+%% Purpose: read certain peer fields and return their value
+%% Args: tableId of the peer table, PeerId,the field to be read
+%% Returns: the value of the requested field
+%%--------------------------------------------------------------------
 read_field(Tid, PeerId, Field) ->
     [Peer] = ets:lookup(Tid, PeerId),
     case Field of
