@@ -28,9 +28,9 @@ recv(Socket, Dl_pid, Parent) ->
     My_peer_id = download_manager:get_my_id(Dl_pid),
     My_info_hash = download_manager:get_my_info_hash(Dl_pid),
 
-    case handshake_handler:recv_handshake(Socket, My_info_hash, port_listener) of
+    case handshake_handler:recv_handshake(Socket, My_info_hash) of
 	{ok, {Socket, Peer_id}} ->
-	    case handshake_handler:send_handshake({socket, Socket}, My_info_hash, My_peer_id, port_listener) of
+	    case handshake_handler:send_handshake({socket, Socket}, My_info_hash, My_peer_id) of
 		{ok, Socket} ->
 		    ok = peers:insert_valid_peer(Parent, Peer_id, Socket),    
 		    io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");

@@ -138,10 +138,8 @@ handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
     io:format(H),
     case send_handshake(H, Port, Info, Peer_id, Peers_pid) of
 	{error, Reason} ->
-	    io:format("~n~n Tracker peer failed to handshake! reason: ~w~n~n", [Reason]),
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
 	{ok, inserted} ->
-	    io:format("~n~n Tracker peer successfully handshaken and inserted!~n~n"),
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid)
     end.
 
@@ -165,9 +163,9 @@ convert_to_ip([H|T], New_list) ->
 
 send_handshake(Host, Port, Info, My_peer_id, Peers_pid) -> 
     My_pid = self(),
-    Hs_pid = spawn(fun() -> case handshake_handler:send_handshake({ip, Host, Port}, Info, My_peer_id, peers) of
+    Hs_pid = spawn(fun() -> case handshake_handler:send_handshake({ip, Host, Port}, Info, My_peer_id) of
 				{ok, Socket} ->
-				    case handshake_handler:recv_handshake(Socket, Info, peers) of
+				    case handshake_handler:recv_handshake(Socket, Info) of
 					{ok, Data} ->
 					    My_pid ! {ok, Data};
 					{error, Reason} ->
