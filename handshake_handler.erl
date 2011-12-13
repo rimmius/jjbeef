@@ -23,7 +23,6 @@ send_handshake({socket, Socket}, My_info_hash, My_peer_id, From) ->
 			  list_to_binary(My_peer_id)]),
     case gen_tcp:send(Socket, Msg) of
 	ok ->
-	    io:format("~n~nFrom: ~w Connected, sent info_hash= ~w ~n~n", [From, My_info_hash]),
 	    {ok, Socket};	    
 	{error, Reason} ->
 	    {error, Reason}
@@ -36,7 +35,6 @@ recv_handshake(Socket, My_info_hash, From) ->
 		{ok, <<_Reserved:64,
 		       Info_hash:160,
 		       Peer_id:160>>} ->
-		    io:format("~n~n From:~w handshake received. their info_hash= ~w ~n~n", [From, <<Info_hash:160>>]),
 		    case  binary_to_list(<<Info_hash:160>>) =:= binary_to_list(My_info_hash) of
 			true ->
 			    {ok, {Socket, Peer_id}};
