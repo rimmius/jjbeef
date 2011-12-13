@@ -65,7 +65,6 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    link(Pid),
 		    New_children = insertChild({Pid, Sock}, Children),
 		    From ! {reply, ok},
-		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
 	{update_interest, Index} ->
@@ -137,7 +136,7 @@ handshake_all_peers([], _Info, _Peer_id, _Peers_pid) ->
 handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
     io:format(H),
     case send_handshake(H, Port, Info, Peer_id, Peers_pid) of
-	{error, Reason} ->
+	{error, _Reason} ->
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
 	{ok, inserted} ->
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid)
@@ -163,7 +162,7 @@ convert_to_ip([H|T], New_list) ->
 
 send_handshake(Host, Port, Info, My_peer_id, Peers_pid) -> 
     My_pid = self(),
-    Hs_pid = spawn(fun() -> case handshake_handler:send_handshake({ip, Host, Port}, Info, My_peer_id) of
+    spawn(fun() -> case handshake_handler:send_handshake({ip, Host, Port}, Info, My_peer_id) of
 				{ok, Socket} ->
 				    case handshake_handler:recv_handshake(Socket, Info) of
 					{ok, Data} ->

@@ -33,7 +33,7 @@ loop(Parent, Socket, Msg_reader_pid) ->
 	start_receiving ->
 	    do_recv(Parent, Socket, Msg_reader_pid),
 	    loop(Parent, Socket, Msg_reader_pid);
-	{'EXIT', Pid, Reason} ->
+	{'EXIT', Pid, _Reason} ->
 	    io:format("~n~n*****EXIT***** msg_recver ~w's child: ~w exits~n", [self(), Pid]),
 	    gen_tcp:close(Socket),
 	    io:format("~n*****EXIT*****socket successfully closed, going to exit~n"),
@@ -132,7 +132,6 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 		    %%piece
 		    io:format("~n*****~w*****piece len=9+~w, id=7, index=~w, begin=~w~n", 
 			      [self(), Len-9, Index, Begin]),
-		    io:format("~n~n~n~nPIEEEEECEEEEEEE~n~n~n"),
 		    message_reader:read_msg(Msg_reader_pid, piece, [Index, Begin, Block, Block_len]),
 		    message_handler:done(Parent);
 		{error, Reason} ->
@@ -145,7 +144,7 @@ do_recv(Parent, Socket, Msg_reader_pid) ->
 	    message_handler:error(Parent, self());
 	    %%do_recv(Socket, Pid_message_reader); %% not sure
 	{error, Reason} ->
-	    io:format("~n*****~w*****INITIALmessage receiving error: ~w~n", [self(), Reason]),
+	    io:format("~n*****~w*****INITIALmessage receiving error: ~w~nSOCKET=~w", [self(), Reason, Socket]),
 	    message_handler:error(Parent, self());	    
 	_ ->
 	    io:format("WWWWWWTTTTTFFFFF FYYYYYYYYYYYY FAANANAFNAFNAFNAFANFANNA~n"),

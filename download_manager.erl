@@ -22,7 +22,8 @@ init(File, GUIPid) ->
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict})),
     link(Peers_pid),
-    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid).
+    Our_id = guimain:createUniqueId(),
+    loop(Peers_pid, Info_hash,Info_bencoded, Our_id, GUIPid).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
     Pid ! {valid_info, self(), Info_from_peer},

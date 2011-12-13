@@ -17,11 +17,11 @@ start() ->
 createUniqueId() ->
     %%check_length(
     {Nr, Nr2, Nr3} = now(),
-    check_length(integer_to_list(Nr) ++ integer_to_list(Nr2) ++ integer_to_list(Nr3)).
+    check_length("-JB1010-").
 check_length(Id) when length(Id) =:= 20 ->
     Id;
 check_length(Id) ->
-    check_length(Id ++ "0").
+    check_length(Id ++ integer_to_list(random:uniform(9))).
 %%Creates the Window and sets the parameters.
 create_window() ->
     GUIServer = wx:new(),  %% Creates the server for the GUI.
