@@ -5,7 +5,7 @@
 
 -module(download_manager).
 -export([start/2,  init/2, is_valid_info_hash/2, 
-	 get_my_id/1, get_my_info_hash/1, get_info_clean/1]).
+	 get_my_id/1, get_my_info_hash/1, get_info_clean/1, close/1]).
 
 start(File, GUIPid) ->
     spawn_link(?MODULE, init, [File, GUIPid]).
@@ -65,10 +65,12 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 	{get_my_info_hash, From} ->
 	    From ! {reply, Info_hash},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	close ->
+	    ok;
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill)
-    after 10000 ->
+    after 5000 ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive
 		{reply, Downloaded} ->
@@ -145,6 +147,8 @@ handle_pieces([H|T],Piece_list, Byte, New_list) when Byte =< 20 ->
 handle_pieces(List, Piece_list, _Byte, New_list)  ->
     handle_pieces(List,[], 1, [lists:reverse(Piece_list)|New_list]).
 
+close(Dl_pid) ->
+    Dl_pid ! close.
 
     %Piece_pid = spawn(fun() -> loop({List_of_pieces,[]}, Peer_pid)end),
     %get_pieces(Piece_pid).

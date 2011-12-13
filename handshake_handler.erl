@@ -11,7 +11,7 @@
 
 send_handshake({ip, Host, Port}, My_info_hash, My_peer_id) ->    
     case gen_tcp:connect(Host, Port, [binary, {active, false},
-				      {packet, 0}, {reuseaddr, true}], 1000) of
+				      {packet, 0}], 1000) of
 	{ok, Socket} ->	   	   
 	    send_handshake({socket, Socket}, My_info_hash, My_peer_id);
 	{error, Reason} ->

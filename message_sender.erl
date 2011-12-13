@@ -2,6 +2,8 @@
 -export([start/2, send/3]).
 -export([loop/2, do_send/3]).
 
+-export([handle_bitfield/1, make_bitfield/2]).
+
 start(Parent, Socket) ->
     spawn(?MODULE, loop, [Parent, Socket]).
 

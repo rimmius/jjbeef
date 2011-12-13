@@ -10,25 +10,29 @@
 -export([start/6, send/3, done/1, error/2, close_socket/1]).
 -export([loop/5, init/6]).
 
-start(Parent, Socket, Peer_id, 
+start(Requester_pid, Socket, Peer_id, 
       Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
-    io:format("~nMsg_handler started. ~n"),
     spawn(?MODULE, init,
-	  [Parent, Socket, Peer_id, 
+	  [Requester_pid, Socket, Peer_id, 
 	   Peer_mutex_pid, Piece_mutex_pid, File_storage_pid]).
 
 %%done
-init(Parent, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
-    io:format("~nmsg handler goes receiving!~n"),
+init(Requester_pid, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid) ->
     process_flag(trap_exit, true),
-    Msg_recver_pid = message_receiver:start(Parent, self(), 
+    receive
+	{uploader, Uploader_pid} ->
+	    ok
+    end,
+    Msg_recver_pid = message_receiver:start(Requester_pid, Uploader_pid, self(), 
 					    Peer_mutex_pid,
 					    Piece_mutex_pid, 
 					    File_storage_pid,
 					    Socket, Peer_id),
     link(Msg_recver_pid),
+
     Msg_sender_pid = message_sender:start(self(), Socket),
-    link(Msg_recver_pid),
+    link(Msg_sender_pid),
+
     ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).
 
@@ -54,31 +58,32 @@ close_socket(Pid) ->
 loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
     receive
 	{start_sending, Type, Msg} ->
-	    loop(Socket, Peer_id, 
-		 Msg_recver_pid, Msg_sender_pid,
-		 [{Type, Msg} | Send_requests]);
+	    ok = message_sender:send(Msg_sender_pid, Type, Msg),
+	    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests);
+%% 	    loop(Socket, Peer_id, 
+%% 		 Msg_recver_pid, Msg_sender_pid,
+%% 		 [{Type, Msg} | Send_requests]);
 	msg_done -> 
-	    case Send_requests of 
-		[] ->
-		    ok = message_receiver:start_receiving(Msg_recver_pid),
-		    loop(Socket, Peer_id, 
-			 Msg_recver_pid, Msg_sender_pid, []);
-	       [{Type, Msg} | Rest] ->
-		    ok = message_sender:send(Msg_sender_pid, Type, Msg),
-		    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Rest)
-	    end;
+	    ok = message_receiver:start_receiving(Msg_recver_pid),
+	    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests);
+%% 	    case Send_requests of 
+%% 		[] ->
+%% 		    ok = message_receiver:start_receiving(Msg_recver_pid),
+%% 		    loop(Socket, Peer_id, 
+%% 			 Msg_recver_pid, Msg_sender_pid, []);
+%% 	       [{Type, Msg} | Rest] ->
+%% 		    ok = message_sender:send(Msg_sender_pid, Type, Msg),
+%% 		    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Rest)
+%% 	    end;
 	{close_socket, From} ->	    
 	    From ! {reply, gen_tcp:close(Socket)};
 	{error, Msg_recver_pid} ->
 	    gen_tcp:close(Socket),
-	    io:format("*****EXIT*****socket successfully closed, going to exit~n"),
 	    exit(self(), kill);
 	{error, Msg_sender_pid} ->
 	    gen_tcp:close(Socket),
-	    io:format("*****EXIT*****socket successfully closed, going to exit~n"),
 	    exit(self(), kill);
 	{'EXIT', _Pid, _Reason} ->
 	    gen_tcp:close(Socket),
-	    io:format("*****EXIT*****socket successfully closed, going to exit~n"),
 	    exit(self(), kill)
     end.

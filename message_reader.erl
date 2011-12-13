@@ -1,18 +1,18 @@
 -module(message_reader).
--export([start/5, read_msg/3]).
--export([loop/5]).
+-export([start/6, read_msg/3]).
+-export([loop/6]).
 
 %% exported
-start(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
-    spawn(?MODULE, loop, [Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
+start(Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
+    spawn(?MODULE, loop, [Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id]).
 
 read_msg(Pid, Type, Args) ->
     Pid ! {Type, Args}.
 
-loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
+loop(Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
     receive
 	{keep_alive, []} ->
-	    piece_requester:send_event(Grandparent, keep_alive, ok);
+	    piece_requester:send_event(Requester_pid, keep_alive, ok);
 	{bitfield, [Bitfield, Bitfield_len]} ->
 	    %%io:format("~nBitfiled: ~w~n", [lol(<<Bitfield:Bitfield_len>>, 0)]),
 	    Bitfield_in_list = make_bitfield_with_index(<<Bitfield:Bitfield_len>>, 0),
@@ -25,10 +25,10 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	    mutex:received(File_storage_pid),
 	    
 	    %% save in fsm bitfield and interest
-	    piece_requester:update_interest(Grandparent, List_of_interest, add);
+	    piece_requester:update_interest(Requester_pid, List_of_interest, add);
 %% 	    case length(List_of_interest) of
-%% 		[] ->  piece_requester:send_event(Grandparent, am_interested, false);
-%% 		_ ->  piece_requester:send_event(Grandparent, am_interested, true)
+%% 		[] ->  piece_requester:send_event(Requester_pid, am_interested, false);
+%% 		_ ->  piece_requester:send_event(Requester_pid, am_interested, true)
 %% 	    end;
 	   
 	{have, [Piece_index]} ->
@@ -42,24 +42,25 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 
 	    case Am_interested of
 		true -> 
-		    piece_requester:update_interest(Grandparent, [Piece_index], add);
-		    %% piece_requester:send_event(Grandparent, am_interested, Am_interested);
+		    piece_requester:update_interest(Requester_pid, [Piece_index], add);
+		    %% piece_requester:send_event(Requester_pid, am_interested, Am_interested);
 		false -> ok %% noting to do
 	    end;
 	{am_choked, [Arg]} ->
 	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, choke, Arg]),
 	    mutex:received(Peer_mutex_pid),
-	    piece_requester:send_event(Grandparent, am_choked, Arg);	
+	    piece_requester:send_event(Requester_pid, am_choked, Arg);	
 	{is_interested, [Arg]} ->
 	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, interested, Arg]),
-	    mutex:received(Peer_mutex_pid);
+	    mutex:received(Peer_mutex_pid),
+	    piece_uploader:send_event(Uploader_pid, is_interested, Arg);
 	{port, [Listen_port]} ->
 	    mutex:request(Peer_mutex_pid, update_peer, [Peer_id, port, Listen_port]),
 	    mutex:received(Peer_mutex_pid);
 	{piece, [Index, Begin, Block, Block_len]} ->
-	    Is_complete = mutex:request(File_storage_pid, insert_chunk, [Grandparent, Index, Begin, Block, Block_len]),
+	    Is_complete = mutex:request(File_storage_pid, insert_chunk, [Requester_pid, Index, Begin, Block, Block_len]),
 	    mutex:received(File_storage_pid),
-	    piece_requester:send_event(Grandparent, piece, {Is_complete, Index});
+	    piece_requester:send_event(Requester_pid, piece, {Is_complete, Index});
 	{request, [_Index, _Begin, _Length]} ->
 	    %% TODO
 	    ok;
@@ -67,7 +68,7 @@ loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id) ->
 	    %% TODO
 	    ok
     end,
-    loop(Grandparent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id).
+    loop(Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Peer_id).
 
 make_bitfield_with_index(<<P:1>>, Index) ->
     [{P, Index}];

@@ -80,10 +80,13 @@ init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storag
 
     Msg_handler_pid = message_handler:start(self(), Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid),
     link(Msg_handler_pid),
-    io:format("msg_handler started~n"),
 
     {ok, Uploader_pid} = piece_uploader:start_link(self(), File_storage_pid, Msg_handler_pid),
     link(Uploader_pid),
+
+    Msg_handler_pid ! {uploader, Uploader_pid},
+
+    io:format("~n-> Piece_requester's first state~n~n~n"),
     
     {ok, am_choked_uninterested, #state{parent = Parent,
 					piece_storage = Piece_mutex_pid,
@@ -143,7 +146,7 @@ am_unchoked_interested_unrequested(timeout, State) ->
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),	    
 	    
-	    io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
+	    %% io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
 	    mutex:received(State#state.file_storage),
 
@@ -198,7 +201,7 @@ am_unchoked_interested_requested({piece_error, Old_index}, State) ->
 	    mutex:request(State#state.download_storage, write_piece, [Index, Data, self()]),
 	    mutex:received(State#state.download_storage),	    
 	    
-	    io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
+	    %% io:format("**piece_requester~w**  got rarest index = ~w, rdy to send request ~n", [self(), Index]),
 	    Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
 	    mutex:received(State#state.file_storage),
 
@@ -274,6 +277,7 @@ state_name(_Event, _From, State) ->
 %%--------------------------------------------------------------------
 
 handle_event({update_interest, Index_in_list, Action}, StateName, State) ->
+
     %% all states
     New_list_of_interest =  case Action of 
 				add -> State#state.interested_index ++ Index_in_list;
@@ -349,12 +353,9 @@ handle_info({'EXIT', Pid, _Reason}, StateName, State) ->
     Uploader_pid = State#state.uploader,
     case Pid of
 	Msg_handler ->	    
-	    io:format("*****EXIT*****piece_requester (~w)'s child killed~n", [self()]),
 	    {stop, normal, State};
 	Parent ->
-	    io:format("*****EXIT*****piece_requester (~w)'s parent killed~n", [self()]),
 	    message_handler:close_socket(Msg_handler),
-	    io:format("*****EXIT*****socket successfully closed~n"),
 	    {stop, normal, State};
 	Uploader_pid ->
 	    {ok, New_uploader_pid} = piece_uploader:start_link(self(), State#state.file_storage, State#state.msg_handler),
