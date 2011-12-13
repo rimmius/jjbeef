@@ -67,7 +67,7 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill)
-    after 10000 ->
+    after 3000 ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive
 		{reply, Downloaded} ->
