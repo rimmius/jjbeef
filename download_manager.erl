@@ -6,6 +6,8 @@
 -module(download_manager).
 -export([start/2,  init/2, is_valid_info_hash/2, 
 	 get_my_id/1, get_my_info_hash/1, get_info_clean/1]).
+-export([get_torrent_data/1, get_announce_list/1, get_pieces/1, 
+	get_piece_length/1, get_length_and_name/1]). 
 
 start(File, GUIPid) ->
     spawn_link(?MODULE, init, [File, GUIPid]).
@@ -22,7 +24,7 @@ init(File, GUIPid) ->
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict})),
     link(Peers_pid),
-    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid).
+    loop(Peers_pid, Info_hash, Info_bencoded, guimain:createUniqueId(), GUIPid).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
     Pid ! {valid_info, self(), Info_from_peer},

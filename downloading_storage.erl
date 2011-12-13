@@ -30,17 +30,17 @@ loop(Tid) ->
 	{request, Function, Args, From} ->
 	    case Function of
 		write_piece ->
-		    [PieceIndex, Tuple, Pid] = Args,
-		    From ! {reply, write(Tid, PieceIndex, Tuple, Pid)};
+		    [Piece_index, Tuple, Pid] = Args,
+		    From ! {reply, write(Tid, Piece_index, Tuple, Pid)};
 		put_back ->
-		    [Pid,Index] = Args,
+		    [Pid, Index] = Args,
 		    From ! {reply, put_back(Tid, Pid, Index)};
 		put_back_with_only_pid ->
 		    [Pid] = Args,
 		    From ! {reply, put_back_with_only_pid(Tid, Pid)};
 		compare_hash ->
-		    [Pid, FileIndex, FileHash] = Args,
-		    From!{reply,compare_hash(Tid, Pid, FileIndex, FileHash)}
+		    [Pid, File_index, File_hash] = Args,
+		    From!{reply, compare_hash(Tid, Pid, File_index, File_hash)}
 	    end,
 	    loop(Tid);
 	{lookup, Data, From} -> 
@@ -56,9 +56,10 @@ loop(Tid) ->
 %% Args:  TableID of downloading table, piece index, the piece, processID
 %%        of the peer.
 %%--------------------------------------------------------------------
-write(Tid, PieceIndex, Tuple, Pid) ->
-    {PieceIndex, {Hash, Peers}} = Tuple,
-    ets:insert(Tid, {{Pid, PieceIndex}, {PieceIndex, {Hash, Peers}}}).
+
+write(Tid, Piece_index, Tuple, Pid) ->
+    {Piece_index, {Hash, Peers}} = Tuple,
+    ets:insert(Tid, {{Pid, Piece_index}, {Piece_index, {Hash, Peers}}}).
 
 %%--------------------------------------------------------------------
 %% Function: put_back/3
@@ -70,6 +71,7 @@ write(Tid, PieceIndex, Tuple, Pid) ->
 %% Returns: either [] if no record is found, or {Index,{Hash,Peers}}which
 %%          is the piece
 %%--------------------------------------------------------------------
+
 put_back(Tid, Pid, Index) ->
     case ets:lookup(Tid, {Pid, Index}) of
 	[] ->
@@ -79,7 +81,7 @@ put_back(Tid, Pid, Index) ->
     end.
 
 %%--------------------------------------------------------------------
-%% Function: put_back_withou_only_pid/2
+%% Function: put_back_with_only_pid/2
 %% Purpose: If a peer disconnects before we have received the entire
 %%          piece,this function will try to find a list of pieces downloaded
 %%          by this peer by its Pid. This list later will be put back to 
@@ -87,22 +89,23 @@ put_back(Tid, Pid, Index) ->
 %% Args: TableId of downloading table,Pid of the disconnected peer
 %% Returns: either an empty list if no record is found or a list of pieces
 %%--------------------------------------------------------------------
-put_back_with_only_pid(Tid, FilePid) ->
+
+put_back_with_only_pid(Tid, File_pid) ->
     First_key = ets:first(Tid),
-    put_back_new(Tid, FilePid, First_key, []).
-put_back_new(Tid, FilePid, Key, List) ->
+    put_back_new(Tid, File_pid, First_key, []).
+put_back_new(Tid, File_pid, Key, List) ->
    case ets:lookup(Tid, Key) of
        [] ->
 	   [];
        [{{Pid, Index}, {Index, {Hash, Peers}}}] ->
-	   case Pid =:= FilePid of
+	   case Pid =:= File_pid of
 	       true->
 		   Next_key = ets:next(Tid, Key),
 		   case Next_key of
 		       '$end_of_table'->
 			   [{Index, {Hash, Peers}}|List];
 		       _found ->
-			   put_back_new(Tid, FilePid, Next_key,
+			   put_back_new(Tid, File_pid, Next_key,
 					[{Index, {Hash, Peers}}|List])
 		   end;
 	       false ->
@@ -111,7 +114,7 @@ put_back_new(Tid, FilePid, Key, List) ->
 		       '$end_of_table' ->
 			   List;
 		       _found ->
-			   put_back_new(Tid, FilePid, Next_key, List)
+			   put_back_new(Tid, File_pid, Next_key, List)
 			       
 		   end
 	   end
@@ -125,14 +128,15 @@ put_back_new(Tid, FilePid, Key, List) ->
 %%       piece hash.
 %% Returns: true if the hash is good and false is the hash is corrupted
 %%--------------------------------------------------------------------
-compare_hash(Tid, Pid, FileIndex, FileHash) ->
-    case ets:lookup(Tid, {Pid, FileIndex}) of
+
+compare_hash(Tid, Pid, File_index, File_hash) ->
+    case ets:lookup(Tid, {Pid, File_index}) of
 	[]->
 	    cannot_find_this_Pid;
 	[{{Pid, Index}, {Index, {Hash, _Peers}}}] ->
-	    case Index == FileIndex of
+	    case Index == File_index of
 		true->
-		    Hash =:= FileHash;
+		    Hash =:= File_hash;
 		false ->
 		    index_dont_match
 	    end
