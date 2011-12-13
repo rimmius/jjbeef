@@ -3,8 +3,7 @@
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
--export([start/1, init/1, initiate_table/1, place_rarest/4]).
-
+-export([start/1, init/1]).
 
 start(List) ->
     spawn(?MODULE, init, [List]).
@@ -12,7 +11,6 @@ start(List) ->
 init(List) ->
     Tid = initiate_table(List),
     loop(Tid, length(List)).
-
 
 initiate_table(List) ->
     Tid = ets:new(db, [ordered_set]),
@@ -50,7 +48,7 @@ loop(Tid, Nr_of_pieces)->
 		    Reply = put_piece_back(Tid, Index, Hash, Peers);
 		put_pieces_back ->
 		    [List] = Args,
-		    Reply = put_pieces_back(Tid,List);
+		    Reply = put_pieces_back(Tid, List);
 		get_rarest_index ->
 		    [PeerId] = Args,
 		    Reply = get_rarest_index(Tid, PeerId, Nr_of_pieces),
@@ -62,8 +60,9 @@ loop(Tid, Nr_of_pieces)->
 			    Reply
 		    end;		   
 		get_rarest_again ->
-		    [PeerId,Old_index] = Args,
-		    Reply = get_rarest_again(Tid,PeerId,Old_index,Nr_of_pieces),
+		    [PeerId, Old_index] = Args,
+		    Reply = get_rarest_again(Tid, PeerId, Old_index,
+					     Nr_of_pieces),
 		    case Reply of
 			{ok, Index, _Tuple} ->
 			    delete_piece(Tid, Index),
@@ -74,9 +73,10 @@ loop(Tid, Nr_of_pieces)->
 	    end,
 	    From ! {reply, Reply},
 	    loop(Tid, Nr_of_pieces);
-	{lookup, Data, From} -> Result = ets:lookup(Tid, Data),
-				From ! {reply, Result},
-				loop(Tid, Nr_of_pieces);
+	{lookup, Data, From} -> 
+	    Result = ets:lookup(Tid, Data),
+	    From ! {reply, Result},
+	    loop(Tid, Nr_of_pieces);
 	stop -> ok;
 	_Anything  ->
 	    loop(piece_table, Nr_of_pieces)
@@ -88,22 +88,21 @@ delete_piece(Tid, Index) ->
 put_piece_back(Tid, Index, Hash, Peers)->
     ets:insert(Tid, {Index, {Hash, Peers}}).
 
-put_pieces_back(Tid,[{Index,{Hash,Peers}}|T])->
-    ets:insert(Tid,{Index,{Hash,Peers}}),
-    put_pieces_back(Tid,T);
-put_pieces_back(_Tid,[]) ->
+put_pieces_back(Tid, [{Index, {Hash, Peers}}|T])->
+    ets:insert(Tid, {Index, {Hash, Peers}}),
+    put_pieces_back(Tid, T);
+put_pieces_back(_Tid, []) ->
     has_inserted_all.
 
-
-get_rarest_again(Tid,PeerId,Index,Nr_of_pieces)->
-    L = get_rarest(Tid,0,Nr_of_pieces,[]),
-    RarestList = kick_out(Index,L),
-    get_rarest_index_inner(Tid,PeerId,RarestList).
+get_rarest_again(Tid, PeerId, Index, Nr_of_pieces)->
+    L = get_rarest(Tid, 0, Nr_of_pieces, []),
+    RarestList = kick_out(Index, L),
+    get_rarest_index_inner(Tid, PeerId, RarestList).
     
-kick_out(Index,[{Index_2, Peers}|T])->
+kick_out(Index, [{Index_2, Peers}|T])->
     case Index =:= Index_2 of
 	false->
-	    [{Index_2, Peers}|kick_out(Index,T)];
+	    [{Index_2, Peers}|kick_out(Index, T)];
 	true ->
 	    T
     end;
@@ -117,7 +116,7 @@ get_rarest_index_inner(Tid, PeerId, [H|T])->
     {Index, [P|Peers]} = H,
     Reply = compare(PeerId, [P|Peers], Index),
     case Reply of
-	{ok, Index}->
+	{ok, Index} ->
 	    Tuple = read_piece(Tid, Index),
 	    {ok, Index, Tuple};
 	{hold} ->
@@ -187,7 +186,7 @@ insert_to_table(_Tid, [], _PeerId) ->
 
 %% update piece storage when a have message is received
 update_bitfield(Tid, PeerId, PieceIndex) ->
-    Result = ets:lookup(Tid,PieceIndex),
+    Result = ets:lookup(Tid, PieceIndex),
     case Result of
 	[]->
 	    non_existent;
