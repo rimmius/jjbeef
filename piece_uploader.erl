@@ -37,9 +37,14 @@ start_link(Piece_requester_pid, File_storage_pid, Msg_handler_pid) ->
 
 send_event(Pid, is_interested, Arg) ->
     case Arg of
-	true -> gen_fsm:send_event(Pid, is_interested);
-	false -> gen_fsm:send_event(Pid, is_not_interested)
-    end.
+	1 -> gen_fsm:send_event(Pid, is_interested);
+	0 -> gen_fsm:send_event(Pid, is_not_interested)
+    end;
+send_event(Pid, request, [Index, Begin, Length]) ->
+    gen_fsm:send_event(Pid, {request, Index, Begin, Length});
+send_event(Pid, cancel, [Index, Begin, Length]) ->
+    gen_fsm:send_event(Pid, {cancel, Index, Begin, Length}).
+
 %%send_event(Pid, is_choked, Arg) ->
 %%    gen_fsm:send_all_state_event(Pid, {is_choked, Arg}).
 
@@ -113,7 +118,7 @@ is_unchoked_interested({request, Index, Begin, Length}, State) ->
     
     case Result of
 	{ok, Block} ->  
-	    message_handler:send(State#state.msg_handler, piece, [Index, Begin, Block]),
+	    message_handler:send(State#state.msg_handler, piece, [Index, Begin, <<Block:(16384*8)>>]),
 	    io:format("~n**piece_uploader~w** piece replied~n", [self()]);
 	{error, _Reason} -> %%TODO
 	    ok

@@ -32,13 +32,16 @@ recv(Socket, Dl_pid, Parent) ->
 	{ok, {Socket, Peer_id}} ->
 	    case handshake_handler:send_handshake({socket, Socket}, My_info_hash, My_peer_id) of
 		{ok, Socket} ->
-		    ok = peers:insert_valid_peer(Parent, Peer_id, Socket),    
-		    io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");
-		{error, Reason} ->
-		    ok
+		   case peers:insert_valid_peer(Parent, Peer_id, Socket) of
+		       ok ->
+			   io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");
+		       {error, Reason} -> {error, Reason}
+		   end;
+		{error, Reason} -> 
+		    {error, Reason}
 		   %% io:format("~n***Port_listener~w error** reason: ~w~n", [self(), Reason])
 	    end;
 	{error, Reason} ->
-	    ok
+	    {error, Reason}
 	  %%  io:format("~n***Port_listener~w error** reason: ~w~n", [self(), Reason])
     end.

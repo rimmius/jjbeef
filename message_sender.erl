@@ -2,7 +2,7 @@
 -export([start/2, send/3]).
 -export([loop/2, do_send/3]).
 
--export([handle_bitfield/1, make_bitfield/2]).
+-export([handle_piece/3, count_bin/2]).
 
 start(Parent, Socket) ->
     spawn(?MODULE, loop, [Parent, Socket]).
@@ -63,7 +63,7 @@ handle_bitfield(Bitfield_in_list) ->
 
 handle_piece(Index, Begin, Block) ->
     Len = count_bin(Block, 0),
-    <<(Len+9):32/integer-big, 7, Index:32/integer-big, Begin:32/integer-big, Block:(Len*8)>>.
+    list_to_binary([<<(Len+9):32/integer-big, 7, Index:32/integer-big, Begin:32/integer-big>>, Block]).
       
 %% O.B.S This is only for binary
 count_bin(<<>>, Count) ->
