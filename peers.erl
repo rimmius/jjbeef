@@ -79,8 +79,13 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    From ! {reply, 0},
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
-		    %%Perc = (Length / How_much) * 100,
-		    From ! {reply, 0},
+		    Perc = How_much / Length,
+		    case Perc > 1 of
+			true ->
+			    From ! {reply, 100};
+			_ ->
+			    From ! {reply, trunc(Perc*100)}
+		    end,
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
 	    end;
 	{'EXIT', Peer_storage_pid, Reason} -> 
@@ -96,19 +101,15 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 	    io:format("looping without file_storage"),
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
-	    io:format("~n~nChild crashed!!!!!!!!!!!!!~w~n~n", [Child]),
 	    case mutex:request(Dl_storage_pid, put_back_with_only_pid, [Child]) of
 		[] ->
-		    io:format("~n~nTHAT PEER DID NOT HAVE A PIECE ~n~n"),
 		    mutex:received(Dl_storage_pid);
 		List ->	
-		    io:format("~n~nTHAT PEER HAD A PIECE~n~n"),
 		    mutex:received(Dl_storage_pid),
 		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
 		    mutex:received(File_storage_pid),
 		    mutex:request(Piece_storage_pid, put_pieces_back, [New_list]),
-		    mutex:received(Piece_storage_pid),
-		    io:format("~n~n~nmoved back that piece~n~n")
+		    mutex:received(Piece_storage_pid)
 	    end,
 	    New_children = removeChild(Child, Children, []),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
@@ -118,7 +119,6 @@ removeChild(_Child, [], New_children) ->
 removeChild(Child, [{Pid, Socket}|T], New_children) ->
     case Child of
 	Pid ->
-	    io:format("~n~nFOUND THAT PEER, REMOVING~n~n"),
 	    removeChild(Child, T, New_children);
 	_  ->
 	    removeChild(Child, T, [{Pid, Socket}|New_children])
@@ -130,20 +130,19 @@ insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
     Info_hash = download_manager:get_my_info_hash(Dl_pid),
     My_id = download_manager:get_my_id(Dl_pid),
-    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, [], 
-			     Peers_pid, Dl_pid).
+    ok = handshake_all_peers(List_of_peers, Info_hash, My_id, Peers_pid).
 
-handshake_all_peers([], _Info, _Peer_id, _New_list, _Peers_pid, _Dl_pid) ->
+handshake_all_peers([], _Info, _Peer_id, _Peers_pid) ->
     ok;
-handshake_all_peers([{H, Port}|T], Info, Peer_id, New_list, Peers_pid, 
-		    Dl_pid) ->
+handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
     io:format(H),
-    case send_handshake(H, Port, Info, Peer_id, Peers_pid, Dl_pid) of
-	error ->
-	    handshake_all_peers(T, Info, Peer_id, New_list, Peers_pid, Dl_pid);
-	Sock ->
-	    handshake_all_peers(T,Info, Peer_id, [{H, Port, Sock}|New_list], 
-				Peers_pid, Dl_pid)
+    case send_handshake(H, Port, Info, Peer_id, Peers_pid) of
+	{error, Reason} ->
+	    io:format("~n~n Tracker peer failed to handshake! reason: ~w~n~n", [Reason]),
+	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
+	{ok, inserted} ->
+	    io:format("~n~n Tracker peer successfully handshaken and inserted!~n~n"),
+	    handshake_all_peers(T, Info, Peer_id, Peers_pid)
     end.
 
 make_peer_list([], _Ip, _Byte, New_list) ->
@@ -164,48 +163,30 @@ convert_to_ip([H|T], New_list) ->
 	    convert_to_ip(T,integer_to_list(H) ++ "." ++ New_list)
     end.
 
-send_handshake(Host, Port, Info, Peer_id, Peers_pid, Dl_pid) ->
+send_handshake(Host, Port, Info, My_peer_id, Peers_pid) -> 
     My_pid = self(),
-    Hs_pid = spawn(fun() ->connect_and_handshake:start(Host, Port, Info, Peer_id, My_pid) end),
+    Hs_pid = spawn(fun() -> case handshake_handler:send_handshake({ip, Host, Port}, Info, My_peer_id, peers) of
+				{ok, Socket} ->
+				    case handshake_handler:recv_handshake(Socket, Info, peers) of
+					{ok, Data} ->
+					    My_pid ! {ok, Data};
+					{error, Reason} ->
+					    My_pid ! {error, Reason}
+				    end;
+				{error, Reason} ->
+				    My_pid ! {error, Reason}
+			    end
+		   end),
     receive
-	{reply, ok, Sock} ->
-	    spawn(fun() -> recv_loop(Sock, Dl_pid, Host, Port, Peers_pid) end),
-	    Sock;
-	{error, _Reason} ->
-	    error
-    after 5000 ->
-	    exit(Hs_pid, kill),
-	    error
-    end.
-
-recv_loop(Socket, Dl_pid, Host,Port, Peers_pid) ->
-    case gen_tcp:recv(Socket, 20) of
-	{ok, <<19, "BitTorrent protocol">>} ->
-	%%{ok, <<Pstrlen:8/integer, 
-	%%     Pstr:(19*8), 
-	%%   Reserved:64, 
-	%% Info_hash:160,
-	%%Peer_id:160>>} ->
-	    case gen_tcp:recv(Socket, 48) of
-		{ok, <<Reserved:64,
-		       Info_hash:160,
-		       Peer_id:160>>} ->
-		    Pid_h = handshake_handler:start(Dl_pid),
-		    Pid_h ! {handshake, self(), Reserved, <<Info_hash:160>>, 
-			     Peer_id},
-		    receive
-			{reply, Pid_h, ok} ->
-			    io:format("~n~nGot handshake back from tracker_peer~n"),
-			    insert_valid_peer(Peers_pid, Peer_id, Socket, 
-					      Host, Port);
-			{reply, Pid_h, drop_connection} ->
-			    gen_tcp:close(Socket)
-		    end
-	    end;
-	{ok, _Data} ->	
-	    ok;
+	{ok, {Socket, Peer_id}} ->
+	    insert_valid_peer(Peers_pid, Peer_id, Socket, 
+			      Host, Port),
+	    {ok, inserted};
 	{error, Reason} ->
-	    io:format("FYFAN REASON: ~w~n", [Reason])
+	    {error, Reason}
+	    %% after 10000 ->
+	    %% exit(Hs_pid, kill),
+	    %% {error, timeout}
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
