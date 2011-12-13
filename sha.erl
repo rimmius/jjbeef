@@ -1,30 +1,50 @@
-%%% @author  <Jing@LENOVO-PC>
-%%% @copyright (C) 2011, 
-%%% @doc
-%%%
-%%% @end
-%%% Created : 18 Oct 2011 by  <lenovo@LENOVO-PC>
+%% created by Jing Liu
+%% URLencoding algorithm created by Fredrik Gustafsson
+%% creation date: 18 Oct 2011
 
 
 -module sha.
 -export([sha1hash/1,urlencode/1,shaurl/1, chunk_it_up/1, sha1raw/1]).
 
-%%only sha1 hash
+%%--------------------------------------------------------------------
+%% Function:sha1hash/1
+%% Purpose: sha1hash data and return a list of intgers on the base of 16
+%% Args: Data to be hashed
+%% Returns:  a list of intgers on the base of 16
+%%--------------------------------------------------------------------
+
 sha1hash(Data)->
     crypto:start(),
     L = [ hd(integer_to_list(N, 16)) || << N:4 >> <= crypto:sha(Data) ],
     L.
+%%--------------------------------------------------------------------
+%% Function: sha1raw/1
+%% Purpose: sha1hash the data and return a list of integers same with 
+%%          the binary value
+%% Args: Data to be hashed
+%% Returns: a list of integers same with the binary value
+%%--------------------------------------------------------------------
+
 sha1raw(Data) ->
     crypto:start(),
     binary_to_list(crypto:sha(Data)).
-%%only urlencoding
+
+%% library function for url encoding
 urlencode(Sha)->
     edoc_lib:escape_uri(Sha).
 
-%%sha1hash + urlencoding
+%%--------------------------------------------------------------------
+%% Function: shaurl/1
+%% Purpose: sha1 and url encoding combined
+%% Args: Data to be hashed
+%% Returns: hashed and url encoded data
+%%--------------------------------------------------------------------
+
 shaurl(Data)->
     L = sha1hash(Data),
     chunk_it_up(L).
+
+%% inner function for url encoding
 chunk_it_up([]) ->
     [];
 chunk_it_up([H|T]) ->
@@ -36,6 +56,7 @@ chunk_it_up([H|T]) ->
 	    [check_digits(http_util:hexlist_to_integer(List1))|chunk_it_up(List2)]
     end.
 
+%% inner function for url encoding
 check_digits(N) when (N >= 65) and (N =< 90) ->
     [N];
 check_digits(N) when (N >= 97) and (N =< 122) ->
