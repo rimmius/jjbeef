@@ -3,14 +3,14 @@
 
 -module(peers).
 -export([start/6, insert_new_peers/3, insert_valid_peer/3, notice_have/2]).
--export([init/8]).
+-export([init/9]).
 
 %%Starts the peers module and hands back the pid
-start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names, Length_in_list}, File_name) ->
-    spawn(peers, init, [Dl_pid, Tracker_list, Pieces, Piece_length, Length, File_names, Length_in_list, File_name]).
+start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names, Length_in_list, Path}, File_name) ->
+    spawn(peers, init, [Dl_pid, Tracker_list, Pieces, Piece_length, Length, File_names, Length_in_list, File_name, Path]).
 
 %%Starts the Mutex and stores the pid of it in the loop
-init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Length_in_list, File_name) ->
+init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Length_in_list, File_name, Path) ->
     process_flag(trap_exit, true),
     Dets_name = File_name ++ ".dets",
     Peer_storage_pid = mutex:start(peer_storage, []),
@@ -19,7 +19,7 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Len
     link(Piece_storage_pid),
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
-    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid, Dets_name]),
+    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid, Dets_name, Path]),
     link(File_storage_pid),
     Peers_pid = self(),
     Port_listener_pid = port_listener:start(6881, Dl_pid, Peers_pid),
@@ -109,11 +109,11 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
 		    mutex:received(File_storage_pid),
 		    mutex:request(Piece_storage_pid, put_pieces_back, [New_list]),
-		    mutex:received(Piece_storage_pid),
-		    {value, {_Pid, _Socket, Peer_id}} = lists:keysearch(Child, 1, Children),
-		    mutex:request(Peer_storage_pid, delete_peer, [Peer_id]),
-		    mutex:received(Peer_storage_pid)
+		    mutex:received(Piece_storage_pid)
 	    end,
+	    {value, {_Pid, _Socket, Peer_id}} = lists:keysearch(Child, 1, Children),
+	    mutex:request(Peer_storage_pid, delete_peer, [Peer_id]),
+	    mutex:received(Peer_storage_pid),
 	    New_children = removeChild(Child, Children, []),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
     end.

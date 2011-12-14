@@ -36,7 +36,6 @@
 %%--------------------------------------------------------------------
 start_link(Parent, Peer_mutex_pid, Piece_mutex_pid, 
 	   File_storage_pid, Download_storage_pid, Socket, Peer_id) ->
-    io:format("going to start fsm~n"),
     gen_fsm:start_link(?MODULE, [Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storage_pid, Socket, Peer_id], []).
 
 send_event(Pid, am_choked, Am_choked) ->
@@ -86,7 +85,6 @@ init([Parent, Peer_mutex_pid, Piece_mutex_pid, File_storage_pid, Download_storag
 
     Msg_handler_pid ! {uploader, Uploader_pid},
 
-    io:format("~n-> Piece_requester's first state~n~n~n"),
     
     {ok, am_choked_uninterested, #state{parent = Parent,
 					piece_storage = Piece_mutex_pid,
@@ -151,17 +149,14 @@ am_unchoked_interested_unrequested(timeout, State) ->
 	    mutex:received(State#state.file_storage),
 
 	    case Chunk_result of
-		{Begin, Length} ->
-		    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
+		{Begin, Length} ->		
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% with 1 s timeout, wait for complete/incomplete
 		    {next_state, am_unchoked_interested_requested, State#state{sent_request = {[Index, Begin, Length], 40}}, 1000};
 		access_denied ->
-		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 		    {next_state, am_unchoked_interested_unrequested, State, 0}
 	    end;		
 	{hold} -> 
-	    io:format("*****hold****** im not requesting any pieces for 20 seconds!!!! da shit wuha kung fu panda!!~n"),
 	    {next_state, am_unchoked_interested_unrequested, State, 20000}
     end.
 
@@ -172,10 +167,8 @@ am_unchoked_interested_requested(am_unchoked, State) ->
 	%% problem domain
     {next_state, am_unchoked_interested_requested, State, 1000};	
 am_unchoked_interested_requested({piece_complete, Index}, State) ->
-    io:format("**piece_requester~w**  piece_complete received by piece_requester~n", [self()]),
     peers:notice_have(State#state.parent, Index),
     message_handler:send(State#state.msg_handler, have, Index),
-    io:format("**piece_requester~w**  have sent. going to request again, see io:format below~n", [self()]),
     {next_state, am_unchoked_interested_unrequested, State, 0};
 am_unchoked_interested_requested({piece_incomplete, Index}, State) ->
     Chunk_result = mutex:request(State#state.file_storage, what_chunk, [Index]),
@@ -183,12 +176,10 @@ am_unchoked_interested_requested({piece_incomplete, Index}, State) ->
     
     case Chunk_result of
 	{Begin, Length} ->
-	    io:format("**piece_requester~w**Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 	    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 	    %% with 1 s timeout, wait for complete/incomplete
 	    {next_state, am_unchoked_interested_requested, State#state{sent_request = {[Index, Begin, Length], 40}}, 1000};
 	access_denied ->
-	    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 	    {next_state, am_unchoked_interested_unrequested, State, 0}
     end;
 am_unchoked_interested_requested({piece_error, Old_index}, State) ->
@@ -207,16 +198,13 @@ am_unchoked_interested_requested({piece_error, Old_index}, State) ->
 
 	    case Chunk_result of
 		{Begin, Length} ->
-		    io:format("**piece_requester~w** Rdy to request index=~w, begin=~w, length=~w~n", [self(), Index, Begin, Length]),
 		    message_handler:send(State#state.msg_handler, request, [Index, Begin, Length]),
 		    %% with 1 s timeout, wait for complete/incomplete
 		    {next_state, am_unchoked_interested_requested, State#state{sent_request = {[Index, Begin, Length], 40}}, 1000};
 		access_denied ->
-		    io:format("~n~nALL PIECES ARE TAKEN~n~n"),
 		    {next_state, am_unchoked_interested_unrequested, State, 0}
 	    end;		
 	{hold} -> 
-	    io:format("*****hold****** im not requesting any pieces for 20 seconds!!!! da shit wuha kung fu panda!!~n"),
 	    {next_state, am_unchoked_interested_unrequested, State, 20000}
 	end;
 am_unchoked_interested_requested(timeout, State) ->
@@ -224,7 +212,7 @@ am_unchoked_interested_requested(timeout, State) ->
     case Timeout > 0 of
 	false ->
 	    io:format("~n**piece_requester~w** dropping lazy peer~n", [self()]),
-	    message_handler:close_socket(State#state.msg_handler),
+	    %% message_handler:close_socket(State#state.msg_handler),
 	    {stop, normal, State};
 	true -> 
 	    case (Timeout < 5) of
@@ -359,7 +347,7 @@ handle_info({'EXIT', Pid, _Reason}, StateName, State) ->
 	Msg_handler ->	    
 	    {stop, normal, State};
 	Parent ->
-	    message_handler:close_socket(Msg_handler),
+	    %% message_handler:close_socket(Msg_handler),
 	    {stop, normal, State};
 	Uploader_pid ->
 	    {ok, New_uploader_pid} = piece_uploader:start_link(self(), State#state.file_storage, State#state.msg_handler),
@@ -379,7 +367,8 @@ handle_info({'EXIT', Pid, _Reason}, StateName, State) ->
 %% @spec terminate(Reason, StateName, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(normal, _StateName, _State) ->
+terminate(normal, _StateName, State) ->
+    exit(State#state.msg_handler, kill),
     ok.
 
 %%--------------------------------------------------------------------

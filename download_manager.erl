@@ -122,12 +122,12 @@ get_length_and_name({dict, Dict}) ->
     case dict:find(<<"files">>, Info_dict) of
 	{ok, {_,Files_dict}} ->
 	    {get_length(Files_dict, 0), 
-	     get_names(Files_dict), get_lengths_list(Files_dict)};
+	     get_names(Files_dict), get_lengths_list(Files_dict), dict:fetch(<<"name">>, Info_dict)};
 	error ->
 	    Name_of_files = dict:fetch(<<"name">>, Info_dict),
 	    Length = dict:fetch(<<"length">>, Info_dict),
 	    {Length, 
-	     [binary_to_list(Name_of_files)], [Length]}
+	     [binary_to_list(Name_of_files)], [Length], ""}
     end.
 get_length([], Total) ->
     Total;
