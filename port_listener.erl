@@ -34,7 +34,8 @@ recv(Socket, Dl_pid, Parent) ->
 		{ok, Socket} ->
 		   case peers:insert_valid_peer(Parent, Peer_id, Socket) of
 		       ok ->
-			   io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");
+			   ok;
+		       %%			   io:format("~n~nIncoming peers successfully handshaken and inserted! ~n~n ");
 		       {error, Reason} -> {error, Reason}
 		   end;
 		{error, Reason} -> 

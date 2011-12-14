@@ -71,7 +71,7 @@ init([Piece_requester_pid, File_storage_pid, Msg_handler_pid]) ->
     mutex:received(File_storage_pid),
     message_handler:send(Msg_handler_pid, bitfield, My_bitfield_in_list),
     %% message_handler:send(Msg_handler_pid, choke, []),
-    io:format("~nRequester(~w) my bitfield sent: ~n", [Piece_requester_pid]),
+    %% io:format("~nRequester(~w) my bitfield sent: ~n", [Piece_requester_pid]),
     {ok, is_choked_uninterested, #state{piece_requester = Piece_requester_pid,
 					file_storage = File_storage_pid,
 					msg_handler = Msg_handler_pid}}.

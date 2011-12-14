@@ -15,8 +15,11 @@ loop(Parent, Socket) ->
     receive
 	{do_send, Type, Msg} ->
 	    case do_send(Socket, Type, Msg) of
-		ok -> message_handler:done(Parent);
-		{error, Reason} -> message_handler:error(Parent, self())
+		ok -> 
+			ok;
+		{error, Reason} -> 
+			message_handler:error(Parent, self()),
+			exit(self(), kill)
 	    end,
 	    loop(Parent, Socket)
     end.
@@ -24,6 +27,7 @@ loop(Parent, Socket) ->
 do_send(Socket, Type, Msg) ->
     case {Type, Msg} of 
 	{keep_alive, _} ->
+		io:format("~n--------> keep_alive sent ~w~n", [Socket]),
 	    gen_tcp:send(Socket, <<0,0,0,0>>);			
 	{choke, _} ->
 	    gen_tcp:send(Socket, <<0,0,0,1,0>>);

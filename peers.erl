@@ -65,7 +65,7 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    link(Pid),
 		    New_children = insertChild({Pid, Sock}, Children),
 		    From ! ok,
-		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
+		    %%io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
 	{update_interest, Index} ->
@@ -101,10 +101,13 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 	    io:format("looping without file_storage"),
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
+		io:format("~n~n~n@@@@@@@@@@@@@@@@@@@@@@@@@~n~n"),
 	    case mutex:request(Dl_storage_pid, put_back_with_only_pid, [Child]) of
 		[] ->
+			io:format("...........................~n~n"),
 		    mutex:received(Dl_storage_pid);
 		List ->	
+			io:format("!!!!!!!!!!!!!!!!!!!!!!!!!!!~n~n"),	
 		    mutex:received(Dl_storage_pid),
 		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
 		    mutex:received(File_storage_pid),
@@ -140,7 +143,7 @@ handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
 	{error, Reason} ->
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
 	{ok, inserted} ->
-	    io:format("~n~nTracker peers successfully inserted~n~n"),
+	    %%io:format("~n~nTracker peers successfully inserted~n~n"),
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid)
     end.
 
