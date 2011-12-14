@@ -101,13 +101,10 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 	    io:format("looping without file_storage"),
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
-		io:format("~n~n~n@@@@@@@@@@@@@@@@@@@@@@@@@~n~n"),
 	    case mutex:request(Dl_storage_pid, put_back_with_only_pid, [Child]) of
 		[] ->
-			io:format("...........................~n~n"),
 		    mutex:received(Dl_storage_pid);
 		List ->	
-			io:format("!!!!!!!!!!!!!!!!!!!!!!!!!!!~n~n"),	
 		    mutex:received(Dl_storage_pid),
 		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
 		    mutex:received(File_storage_pid),
