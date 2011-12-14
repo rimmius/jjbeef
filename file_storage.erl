@@ -117,11 +117,11 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    From ! {reply, have(Index, Bitfield)},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
 		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table);
-	{request, get_piece, [Index, Begin, Length], From} ->
-	    io:format("~n~n~n~nGET_PIECE LENGTH=~w~n~n", [Length]),
-	    case Length of
+	{request, get_piece, [Index, Begin, Request_length], From} ->
+	    io:format("~n~n~n~nGET_PIECE LENGTH=~w~n~n", [Request_length]),
+	    case Request_length of
 		16384 ->
-		    Chunk_table_id = ets:lookup(Table_id, Index),
+		    [{Index, Chunk_table_id}] = ets:lookup(Table_id, Index),
 		    From ! get_piece(Begin, Chunk_table_id);
 		_ ->
 		    From ! {error, false}
