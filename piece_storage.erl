@@ -3,14 +3,50 @@
 %%% Creation date: 2011-11-16
 
 -module(piece_storage).
--export([start/1, init/1]).
+-export([start/2, init/2]).
 
-start(List) ->
-    spawn(?MODULE, init, [List]).
+start(List, File_name) ->
+    spawn(?MODULE, init, [List, File_name]).
 
-init(List) ->
-    Tid = initiate_table(List),
-    loop(Tid, length(List)).
+%%--------------------------------------------------------------------
+%% Function: init/2
+%% Purpose: Check if we have an existing dets table with pieces 
+%%          previously downloaded.
+%% Args: List of piece hashes, file name of dets table.  
+%%--------------------------------------------------------------------
+
+init(List, File_name) ->
+    Piece_table = initiate_table(List),
+    case dets:open_file(File_name) of
+	{error, _Reason} -> 
+	    io:format("No table exists~n"),
+	    loop(Piece_table, length(List));
+	{ok, Reference} -> 
+	    Key = dets:first(Reference),
+	    remove_pieces_we_have(Reference, Key, Piece_table), 
+	    dets:close(Reference),
+	    Piece_table_size = ets:info(Piece_table, size),
+	    loop(Piece_table, Piece_table_size)
+    end.
+
+%%--------------------------------------------------------------------
+%% Function: remove_pieces_we_have/2
+%% Purpose: Delete the pieces we have already downloaded
+%% Args: Reference to dets table where we store downloaded pieces,
+%%       the key of the entry we want to lookup, piece table  
+%%--------------------------------------------------------------------
+
+remove_pieces_we_have(Reference, Key, Piece_table) ->
+    case dets:next(Reference, Key) of
+	'$end_of_table' -> 
+	    [{Index, _Object}] = dets:lookup(Reference, Key),
+	    ets:delete(Piece_table, Index);
+	Next_key -> 
+	    [{Index, _Object}] = dets:lookup(Reference, Key),
+	    ets:delete(Piece_table, Index),
+	    remove_pieces_we_have(Reference, Next_key, Piece_table)
+	
+    end.
 
 %%--------------------------------------------------------------------
 %% Function: initiate_table/1
@@ -43,32 +79,32 @@ loop(Tid, Nr_of_pieces)->
 	{request, Function, Args, From} ->
 	    case Function of
 		insert_bitfield ->
-		    [PeerId, [H|T]] = Args,
-		    Reply = insert_bitfield(Tid, PeerId, [H|T]);
+		    [Peer_id, [H|T]] = Args,
+		    Reply = insert_bitfield(Tid, Peer_id, [H|T]);
 		read_piece ->
 		    [Index] = Args,
 		    Reply = read_piece(Tid, Index);
 		update_bitfield ->
-		    [PeerId, PieceIndex] = Args,
-		    Reply = update_bitfield(Tid, PeerId, PieceIndex);
+		    [Peer_id, Piece_index] = Args,
+		    Reply = update_bitfield(Tid, Peer_id, Piece_index);
 		get_piece_hash ->
 		    [Index] = Args,
 		    Reply = get_piece_hash(Tid, Index);
 		delete_peer ->
-		    [PeerId] = Args,
-		    Reply = delete_peer(Tid,PeerId);
+		    [Peer_id] = Args,
+		    Reply = delete_peer(Tid,Peer_id);
 		delete_piece ->
 		    [Index] = Args,
 		    Reply = delete_piece(Tid, Index);
 		put_piece_back ->
-		    [Index, Hash, Peers]=Args,
+		    [Index, Hash, Peers] = Args,
 		    Reply = put_piece_back(Tid, Index, Hash, Peers);
 		put_pieces_back ->
 		    [List] = Args,
 		    Reply = put_pieces_back(Tid, List);
 		get_rarest_index ->
-		    [PeerId] = Args,
-		    Reply = get_rarest_index(Tid, PeerId, Nr_of_pieces),
+		    [Peer_id] = Args,
+		    Reply = get_rarest_index(Tid, Peer_id, Nr_of_pieces),
 		    case Reply of
 			{ok, Index, _Tuple} ->
 			    delete_piece(Tid, Index),
@@ -77,8 +113,8 @@ loop(Tid, Nr_of_pieces)->
 			    Reply
 		    end;		   
 		get_rarest_again ->
-		    [PeerId, Old_index] = Args,
-		    Reply = get_rarest_again(Tid, PeerId, Old_index,
+		    [Peer_id, Old_index] = Args,
+		    Reply = get_rarest_again(Tid, Peer_id, Old_index,
 					     Nr_of_pieces),
 		    case Reply of
 			{ok, Index, _Tuple} ->
@@ -140,16 +176,16 @@ put_pieces_back(_Tid, []) ->
 %% Function: get_rarest_again/4
 %% Purpose: If the rarest piece was corrupted,this function returns 
 %%          the second rarest piece the peer has.
-%% Args: TableId of piece table,peerId,piece index,amount of pieces 
+%% Args: TableId of piece table,Peer_id,piece index,amount of pieces 
 %%       in the piece table.
 %% Returns: either {ok,Piece index}if the peer has it or {hold}if the
 %%          peer hasn't
 %%--------------------------------------------------------------------
 
-get_rarest_again(Tid, PeerId, Index, Nr_of_pieces)->
+get_rarest_again(Tid, Peer_id, Index, Nr_of_pieces)->
     L = get_rarest(Tid, 0, Nr_of_pieces, []),
     RarestList = kick_out(Index, L),
-    get_rarest_index_inner(Tid, PeerId, RarestList).
+    get_rarest_index_inner(Tid, Peer_id, RarestList).
 
 %%--------------------------------------------------------------------
 %% Function: kick_out/2
@@ -172,44 +208,44 @@ kick_out(_Index,[]) ->
 %%--------------------------------------------------------------------
 %% Function: get_rarest_index/3
 %% Purpose: this function returns the rarest piece the peer has.
-%% Args: TableID of piece table, peerID, amount of pieces in piece table.
+%% Args: TableID of piece table, Peer_id, amount of pieces in piece table.
 %% Returns: either {ok,Piece index} when the peer has it or {hold}
 %%          if it hasn't.
 %%--------------------------------------------------------------------
 
-get_rarest_index(Tid, PeerId, Nr_of_pieces)->
+get_rarest_index(Tid, Peer_id, Nr_of_pieces)->
     RarestList = get_rarest(Tid, 0, Nr_of_pieces, []),
-    get_rarest_index_inner(Tid, PeerId, RarestList).
+    get_rarest_index_inner(Tid, Peer_id, RarestList).
 
 %% inner function of insert_bitfield
-get_rarest_index_inner(Tid, PeerId, [H|T])->
+get_rarest_index_inner(Tid, Peer_id, [H|T])->
     {Index, [P|Peers]} = H,
-    Reply = compare(PeerId, [P|Peers], Index),
+    Reply = compare(Peer_id, [P|Peers], Index),
     case Reply of
 	{ok, Index} ->
 	    Tuple = read_piece(Tid, Index),
 	    {ok, Index, Tuple};
 	{hold} ->
-	    get_rarest_index_inner(Tid, PeerId,T)
+	    get_rarest_index_inner(Tid, Peer_id,T)
     end;
-get_rarest_index_inner(_Tid, _PeerId, [])->
+get_rarest_index_inner(_Tid, _Peer_id, [])->
     {hold}.
 
 %%--------------------------------------------------------------------
 %% Function:compare/3
 %% Purpose: check if the peer exists in the peer list of a certain piece
-%% Args: PeerId,peer list,piece index
+%% Args: Peer_id,peer list,piece index
 %% Returns: either {ok,Index} if the peer is found or {hold}if not 
 %%--------------------------------------------------------------------
 
-compare(PeerId, [P|Peers], Index)->
-    case PeerId == P of
+compare(Peer_id, [P|Peers], Index)->
+    case Peer_id == P of
 	true ->
 	    {ok, Index};
 	false ->
-	    compare(PeerId, Peers, Index)
+	    compare(Peer_id, Peers, Index)
     end;
-compare(_PeerId, [], _Index) ->
+compare(_Peer_id, [], _Index) ->
     {hold}.
 
 %%--------------------------------------------------------------------
@@ -254,44 +290,44 @@ place_rarest(_Index, _Peers, [H|T], _New_list) ->
 %%--------------------------------------------------------------------
 %% Function: insert_bitfield/3
 %% Purpose: insert a new peer that has one of the pieces we want into the table
-%% Args: TableId of piece table,PeerId, the bitfield of the peer
+%% Args: TableId of piece table,Peer_id, the bitfield of the peer
 %% Returns: atom has_inserted
 %%--------------------------------------------------------------------
 
-insert_bitfield(Tid, PeerId, [H|T]) ->
+insert_bitfield(Tid, Peer_id, [H|T]) ->
     Has = [X || {1, X} <- [H|T]],
-    insert_to_table(Tid, Has, PeerId).
+    insert_to_table(Tid, Has, Peer_id).
 
 %% inner function of insert_bitfield
-insert_to_table(Tid, [Has|T], PeerId) ->
+insert_to_table(Tid, [Has|T], Peer_id) ->
     Result = ets:lookup(Tid, Has),
     case Result of 
 	[]->
-	    insert_to_table(Tid, T, PeerId);
+	    insert_to_table(Tid, T, Peer_id);
 	_found ->
 	    [{Index, {Hash, Peers}}] = Result,
-	    ets:insert(Tid, {Index, {Hash, [PeerId|Peers]}}),
-	    insert_to_table(Tid, T, PeerId)
+	    ets:insert(Tid, {Index, {Hash, [Peer_id|Peers]}}),
+	    insert_to_table(Tid, T, Peer_id)
      end;
-insert_to_table(_Tid, [], _PeerId) ->
+insert_to_table(_Tid, [], _Peer_id) ->
      has_inserted.
 
 %%--------------------------------------------------------------------
 %% Function:update_bitfield/3
 %% Purpose: update piece storage when a have message is received from 
 %%          a peer
-%% Args: TableId of piece table, peerId, piece index
+%% Args: TableId of piece table, Peer_id, piece index
 %% Returns: atom has_updated
 %%--------------------------------------------------------------------
 
-update_bitfield(Tid, PeerId, PieceIndex) ->
-    Result = ets:lookup(Tid, PieceIndex),
+update_bitfield(Tid, Peer_id, Piece_index) ->
+    Result = ets:lookup(Tid, Piece_index),
     case Result of
 	[]->
 	    non_existent;
 	_found ->
-	    [{PieceIndex, {Hash, Peers}}] = Result,
-	    ets:insert(Tid, {PieceIndex, {Hash, [PeerId|Peers]}}),
+	    [{Piece_index, {Hash, Peers}}] = Result,
+	    ets:insert(Tid, {Piece_index, {Hash, [Peer_id|Peers]}}),
 	    has_updated
     end.
 
@@ -309,33 +345,33 @@ read_piece(Tid, Index) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_piece_hash/2
-%% Purpose: get the piecehash of a piece by providing the piece index
+%% Purpose: get the Piece_index of a piece by providing the piece index
 %% Args: TableId of piece table,piece index
 %% Returns: the hash of the requested piece
 %%--------------------------------------------------------------------
 
 get_piece_hash(Tid, Index) ->
-    [{Index, {Piecehash, _Peers}}] = ets:lookup(Tid, Index),
-    Piecehash.
+    [{Index, {Piece_index, _Peers}}] = ets:lookup(Tid, Index),
+    Piece_index.
 
 %%--------------------------------------------------------------------
 %% Function: delete_peer/2
 %% Purpose: when a peer disconnects, this peer is removed from the peer
 %%          lists in piece table if this peer exists before
-%% Args: TableId of piece table, PeerId
+%% Args: TableId of piece table, Peer_id
 %% Returns: atom has_deleted
 %%--------------------------------------------------------------------
 
-delete_peer(Tid, PeerId)->
-    delete_peer(Tid, PeerId, 0).
-delete_peer(Tid, PeerId, Index) ->
+delete_peer(Tid, Peer_id)->
+    delete_peer(Tid, Peer_id, 0).
+delete_peer(Tid, Peer_id, Index) ->
     io:format("last: ~w~n",[ets:last(Tid)]),
     case Index > ets:last(Tid) of
 	true ->
 	    has_deleted;
 	false ->
-	    [{Index, {Piecehash, Peers}}] = ets:lookup(Tid, Index),
-	    ets:insert(Tid, {Index, {Piecehash, Peers -- [PeerId]}}),
-	    delete_peer(Tid, PeerId, Index + 1)
+	    [{Index, {Piece_index, Peers}}] = ets:lookup(Tid, Index),
+	    ets:insert(Tid, {Index, {Piece_index, Peers -- [Peer_id]}}),
+	    delete_peer(Tid, Peer_id, Index + 1)
     end.
 
