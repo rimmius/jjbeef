@@ -14,10 +14,10 @@
 -export([start_link/3, send_event/3]).
 
 %% gen_fsm callbacks
--export([init/1, is_choked_uninterested/2, is_choked_interested/2, is_unchoked_uninterested/2, is_unchoked_interested/2, state_name/3, handle_event/3,
+-export([init/1, is_choked_uninterested/2, is_choked_interested/2, is_unchoked_uninterested/2, is_unchoked_interested_unrequested/2, is_unchoked_interested_requested/2, state_name/3, handle_event/3,
 	 handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
--record(state, {piece_requester, file_storage, msg_handler}).
+-record(state, {piece_requester, file_storage, msg_handler, requests = []}).
 
 %%%===================================================================
 %%% API
@@ -41,9 +41,9 @@ send_event(Pid, is_interested, Arg) ->
 	0 -> gen_fsm:send_event(Pid, is_not_interested)
     end;
 send_event(Pid, request, [Index, Begin, Length]) ->
-    gen_fsm:send_event(Pid, {request, Index, Begin, Length});
+    gen_fsm:send_event(Pid, {request, {Index, Begin, Length}});
 send_event(Pid, cancel, [Index, Begin, Length]) ->
-    gen_fsm:send_event(Pid, {cancel, Index, Begin, Length}).
+    gen_fsm:send_event(Pid, {cancel, {Index, Begin, Length}}).
 
 %%send_event(Pid, is_choked, Arg) ->
 %%    gen_fsm:send_all_state_event(Pid, {is_choked, Arg}).
@@ -95,38 +95,65 @@ fake(Num) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
+%% state 1 
 is_choked_uninterested(is_interested, State) ->
     message_handler:send(State#state.msg_handler, unchoke, []),
     io:format("~n**piece_uploader~w** unchoke da peer~n", [self()]),
-    {next_state, is_unchoked_interested, State};
+    {next_state, is_unchoked_interested_unrequested, State};
 is_choked_uninterested(is_not_interested, State) ->
     {next_state, is_choked_uninterested, State}.
 
+%% state 2 
 is_choked_interested(is_interested, State) ->
     {next_state, is_choked_interested, State};
 is_choked_interested(is_not_interested, State) ->
     {next_state, is_choked_uninterested, State}.
 
-is_unchoked_interested(is_interested, State) ->
+%% state 3-1
+is_unchoked_interested_unrequested(is_interested, State) ->
     %% NOTHING DONE
-    {next_state, is_unchoked_interested, State};
-is_unchoked_interested(is_not_interested, State) ->
+    {next_state, is_unchoked_interested_unrequested, State};
+is_unchoked_interested_unrequested(is_not_interested, State) ->
     {next_state, is_unchoked_uninterested, State};
-is_unchoked_interested({request, Index, Begin, Length}, State) ->
-    Result = mutex:request(State#state.file_storage, get_piece, [Index, Begin, Length]),
-    mutex:received(State#state.file_storage),
-    
-    case Result of
-	{ok, Block} ->  
-	    message_handler:send(State#state.msg_handler, piece, [Index, Begin, <<Block:(16384*8)>>]),
-	    io:format("~n**piece_uploader~w** piece replied~n", [self()]);
-	{error, _Reason} -> %%TODO
-	    ok
-    end,
-    {next_state, unchoked_interested, State}.   
+is_unchoked_interested_unrequested({request, Data}, State) ->    
+    {next_state, is_unchoked_interested_requested, State#state{requests = [Data]}, 0}.   
 
+%% state 3-2
+is_unchoked_interested_requested(is_interested, State) ->
+    %% NOTHING DONE
+    {next_state, is_unchoked_interested_requested, State, 0};
+is_unchoked_interested_requested(is_not_interested, State) ->
+    {next_state, is_unchoked_uninterested, State#state{requests = []}};
+is_unchoked_interested_requested(timeout, State) ->
+    case State#state.requests of
+	[] -> 
+	    {next_state, is_unchoked_interested_unrequested, State};
+	[{Index, Begin, Length} | Rest] ->  
+	    io:format("~n~n~n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@~n~n"),
+	    Result = mutex:request(State#state.file_storage, get_piece, [Index, Begin, Length]),
+	    mutex:received(State#state.file_storage),
+	    io:format("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!~n~n"),
+    
+	    case Result of
+		{ok, Block} ->  
+		    message_handler:send(State#state.msg_handler, piece, [Index, Begin, <<Block:(16384*8)>>]),
+		    io:format("~n**piece_uploader~w** piece replied~n", [self()]);
+		{error, _Reason} -> %%TODO
+		    ok
+	    end,
+
+	    {next_state, is_unchoked_interested_requested, State#state{requests = Rest}, 0}
+    end;
+is_unchoked_interested_requested({request, Data}, State) ->
+    New_requests = [Data | State#state.requests],
+    {next_state, is_unchoked_interested_requested, State#state{requests = New_requests}, 0};
+is_unchoked_interested_requested({cancel, Data}, State) ->
+    New_requests = lists:delete(Data, State#state.requests),
+    {next_state, is_unchoked_interested_requested, State#state{requests = New_requests}, 0}.
+	     
+%% state 4
 is_unchoked_uninterested(is_interested, State) ->
-    {next_state, is_unchoked_interested, State};
+    {next_state, is_unchoked_interested_unrequested, State};
 is_unchoked_uninterested(is_not_interested, State) ->
     message_handler:send(State#state.msg_handler, choke, []),
     io:format("~n**piece_uploader~w** choke da peer~n", [self()]),
@@ -203,8 +230,8 @@ handle_sync_event(_Event, _From, StateName, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_info(_Info, StateName, State) ->
-    {next_state, StateName, State}.
+handle_info({'EXIT', _Pid, _Reason}, _StateName, State) ->
+    {stop, normal, State}.
 
 %%--------------------------------------------------------------------
 %% @private
