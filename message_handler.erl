@@ -7,7 +7,7 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/6, send/3, error/2, close_socket/1]).
+-export([start/6, send/3, done/1, error/2, close_socket/1]).
 -export([loop/5, init/6]).
 
 start(Requester_pid, Socket, Peer_id, 
@@ -33,7 +33,7 @@ init(Requester_pid, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_stora
     Msg_sender_pid = message_sender:start(self(), Socket),
     link(Msg_sender_pid),
 
-%%    ok = message_receiver:start_receiving(Msg_recver_pid),   
+    ok = message_receiver:start_receiving(Msg_recver_pid),   
     loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, []).
 
 %%%------------------------------------------------------------------
@@ -41,8 +41,8 @@ init(Requester_pid, Socket, Peer_id, Peer_mutex_pid, Piece_mutex_pid, File_stora
 send(Pid, Type, Msg) ->
     Pid ! {start_sending, Type, Msg}.
 
-%%done(Pid) ->
-%%    Pid ! msg_done.
+done(Pid) ->
+    Pid ! msg_done.
 
 error(Pid, From) ->
     Pid ! {error, From}.
@@ -63,9 +63,9 @@ loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
 %% 	    loop(Socket, Peer_id, 
 %% 		 Msg_recver_pid, Msg_sender_pid,
 %% 		 [{Type, Msg} | Send_requests]);
-%%	msg_done -> 
-%%	    ok = message_receiver:start_receiving(Msg_recver_pid),
-%%	    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests);
+	msg_done -> 
+	    ok = message_receiver:start_receiving(Msg_recver_pid),
+	    loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests);
 %% 	    case Send_requests of 
 %% 		[] ->
 %% 		    ok = message_receiver:start_receiving(Msg_recver_pid),
@@ -81,7 +81,7 @@ loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
 	    gen_tcp:close(Socket),
 	    exit(self(), kill);
 	{error, Msg_sender_pid} ->
-	    gen_tcp:close(Socket),		
+	    gen_tcp:close(Socket),
 	    exit(self(), kill);
 	{'EXIT', _Pid, _Reason} ->
 	    gen_tcp:close(Socket),

@@ -2,25 +2,25 @@
 %%%Date: 2011-10-25
 
 -module(peers).
--export([start/5, insert_new_peers/3, insert_valid_peer/3, notice_have/2]).
--export([init/7]).
+-export([start/6, insert_new_peers/3, insert_valid_peer/3, notice_have/2]).
+-export([init/8]).
 
 %%Starts the peers module and hands back the pid
-start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names, Length_in_list}) ->
-    spawn(peers, init, [Dl_pid, Tracker_list, Pieces, Piece_length, Length, File_names, Length_in_list]).
+start(Dl_pid, Tracker_list, Pieces, Piece_length, {Length, File_names, Length_in_list}, File_name) ->
+    spawn(peers, init, [Dl_pid, Tracker_list, Pieces, Piece_length, Length, File_names, Length_in_list, File_name]).
 
 %%Starts the Mutex and stores the pid of it in the loop
-init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Length_in_list) ->
+init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names, Length_in_list, File_name) ->
     process_flag(trap_exit, true),
+    Dets_name = File_name ++ ".dets",
     Peer_storage_pid = mutex:start(peer_storage, []),
     link(Peer_storage_pid),
-    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces]),
+    Piece_storage_pid = mutex:start(piece_storage, [List_of_pieces, Dets_name]),
     link(Piece_storage_pid),
     Dl_storage_pid = mutex:start(downloading_storage, []),
     link(Dl_storage_pid),
-    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid]),
+    File_storage_pid = mutex:start(file_storage, [Dl_storage_pid, File_names, List_of_pieces, Piece_length, Length_in_list, Piece_storage_pid, Dets_name]),
     link(File_storage_pid),
-
     Peers_pid = self(),
     Port_listener_pid = port_listener:start(6881, Dl_pid, Peers_pid),
     link(Port_listener_pid),
@@ -63,9 +63,9 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    mutex:received(Peer_storage_pid),
 		    {ok, Pid} = piece_requester:start_link(self(), Peer_storage_pid, Piece_storage_pid, File_storage_pid, Dl_storage_pid, Sock, Peer_id),
 		    link(Pid),
-		    New_children = insertChild({Pid, Sock}, Children),
+		    New_children = insertChild({Pid, Sock, Peer_id}, Children),
 		    From ! ok,
-		    %%io:format("~n~nIN THE LOOP SENT MESS BACK"),
+		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
 	{update_interest, Index} ->
@@ -109,22 +109,25 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    New_list = mutex:request(File_storage_pid, check_piece, [List]),
 		    mutex:received(File_storage_pid),
 		    mutex:request(Piece_storage_pid, put_pieces_back, [New_list]),
-		    mutex:received(Piece_storage_pid)
+		    mutex:received(Piece_storage_pid),
+		    {value, {_Pid, _Socket, Peer_id}} = lists:keysearch(Child, 1, Children),
+		    mutex:request(Peer_storage_pid, delete_peer, [Peer_id]),
+		    mutex:received(Peer_storage_pid)
 	    end,
 	    New_children = removeChild(Child, Children, []),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
     end.
 removeChild(_Child, [], New_children) ->
     New_children;
-removeChild(Child, [{Pid, Socket}|T], New_children) ->
+removeChild(Child, [{Pid, Socket, Peer_id}|T], New_children) ->
     case Child of
 	Pid ->
 	    removeChild(Child, T, New_children);
 	_  ->
-	    removeChild(Child, T, [{Pid, Socket}|New_children])
+	    removeChild(Child, T, [{Pid, Socket, Peer_id}|New_children])
     end.
-insertChild({Pid, Socket}, List) ->
-    [{Pid, Socket}|List].
+insertChild({Pid, Socket, Peer_id}, List) ->
+    [{Pid, Socket, Peer_id}|List].
 
 insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
     List_of_peers = make_peer_list(List_raw, "", 1, []),
@@ -137,10 +140,9 @@ handshake_all_peers([], _Info, _Peer_id, _Peers_pid) ->
 handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
     io:format(H),
     case send_handshake(H, Port, Info, Peer_id, Peers_pid) of
-	{error, Reason} ->
+	{error, _Reason} ->
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
 	{ok, inserted} ->
-	    %%io:format("~n~nTracker peers successfully inserted~n~n"),
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid)
     end.
 
@@ -167,8 +169,12 @@ send_handshake(Host, Port, Info, My_peer_id, Peers_pid) ->
 	{ok, Socket} ->
 	    case handshake_handler:recv_handshake(Socket, Info) of
 		{ok, {Socket, Peer_id}} ->
-		    ok = insert_valid_peer(Peers_pid, Peer_id, Socket, Host, Port),
-		    {ok, inserted};
+		    case  insert_valid_peer(Peers_pid, Peer_id, Socket, Host, Port) of
+			{error, Reason} ->
+			    {error, Reason};
+			ok ->
+			    {ok, inserted}
+		    end;
 		{error, Reason} ->
 		    {error, Reason}
 	    end;
@@ -193,7 +199,7 @@ insert_valid_peer(Peers_pid, Peer_id, Sock) ->
     %% io:format("~n").
 update_interest([], _Index) ->
     ok;
-update_interest([{Child, _Socket} | Children], Index) ->
+update_interest([{Child, _Socket, _Peer_id} | Children], Index) ->
     %% getting result? not sure
     spawn(piece_requester, update_interest, [Child, [Index], remove]),
     update_interest(Children, Index).

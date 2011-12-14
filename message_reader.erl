@@ -64,8 +64,8 @@ loop(Requester_pid, Uploader_pid, Peer_mutex_pid, Piece_mutex_pid, File_storage_
 	    mutex:received(File_storage_pid),
 	    piece_requester:send_event(Requester_pid, piece, {Is_complete, Index});
 	{request, [Index, Begin, Length]} ->
-	    %%piece_uploader:send_event(Uploader_pid, request, [Index, Begin, Length]);
-		ok;
+	    ok;
+	    %% piece_uploader:send_event(Uploader_pid, request, [Index, Begin, Length]);
 	{cancel, [Index, Begin, Length]} ->
 	    piece_uploader:send_event(Uploader_pid, cancel, [Index, Begin, Length])
     end,

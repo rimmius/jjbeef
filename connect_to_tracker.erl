@@ -30,6 +30,7 @@ loop(Info, Time, My_id, Tracker, Port,Length, Peers_pid, Dl_pid, File_storage_pi
 		    io:format("~n~nLeft=~w~n~n", [Left]),
 		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=" ++ integer_to_list(We_have) ++ "&left=" ++ integer_to_list(Left) ++ "&compact=1"),
 		    spawn(peers, insert_new_peers, [Peers, Peers_pid, Dl_pid]),
+		    Dl_pid ! {this_tracker, Tracker},
 		    loop(Info, Min_time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid, File_storage_pid)
 	    end
     end.	

@@ -20,7 +20,7 @@ init(File, GUIPid) ->
     Peers_pid = peers:start(self(), get_announce_list({dict, Dict}), 
 			    get_pieces({dict, Dict}), 
 			    get_piece_length({dict, Dict}), 
-			    get_length_and_name({dict, Dict})),
+			    get_length_and_name({dict, Dict}), File),
     link(Peers_pid),
     loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid).
 
@@ -64,6 +64,9 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 	{get_my_info_hash, From} ->
 	    From ! {reply, Info_hash},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	{this_tracker, Tracker} ->
+	    GUI_pid ! {tracker, Tracker},
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill)
@@ -71,8 +74,13 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive
 		{reply, Downloaded} ->
-		    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
-		    GUI_pid ! {percentage, Downloaded}
+		    case Downloaded of
+			100 ->
+			    ok;
+			_ ->
+			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
+			    GUI_pid ! {percentage, Downloaded}
+		    end
 	    end,
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid)
     end.
