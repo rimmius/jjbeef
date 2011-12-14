@@ -22,7 +22,7 @@ init(File, GUIPid) ->
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict}), File),
     link(Peers_pid),
-    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid).
+    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), GUIPid, 0).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
     Pid ! {valid_info, self(), Info_from_peer},
@@ -50,23 +50,23 @@ get_info_clean(Dl_pid) ->
 	    Reply
     end.
   
-loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
+loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
     receive
 	{get_clean_info, From} ->
 	    From ! {reply, Info_clean},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{valid_info, From, Info_from_peer} ->
 	    From ! binary_to_list(Info_hash) =:= Info_from_peer,
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{get_id, From} ->
 	    From ! {reply, My_id},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{get_my_info_hash, From} ->
 	    From ! {reply, Info_hash},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{this_tracker, Tracker} ->
 	    GUI_pid ! {tracker, Tracker},
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid);
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill)
@@ -76,13 +76,20 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid) ->
 		{reply, Downloaded} ->
 		    case Downloaded of
 			100 ->
-			    ok;
+			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
+			    case Counter of
+				0 ->
+				    GUI_pid ! {percentage, Downloaded},
+				     loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, 1);
+				_ ->
+				    ok
+			    end;
 			_ ->
 			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
 			    GUI_pid ! {percentage, Downloaded}
 		    end
 	    end,
-	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid)
+	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter)
     end.
 
 get_torrent_data(File) ->

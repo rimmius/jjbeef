@@ -80,7 +80,7 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 		_ ->
 		    Perc = How_much / Length,
-		    case Perc > 1 of
+		    case Perc >= 1 of
 			true ->
 			    From ! {reply, 100};
 			_ ->
