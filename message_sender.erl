@@ -14,47 +14,45 @@ send(Pid, Type, Msg) ->
 loop(Parent, Socket) ->
     receive
 	{do_send, Type, Msg} ->
-	    do_send(Socket, Type, Msg),
-	    message_handler:done(Parent),
+	    case do_send(Socket, Type, Msg) of
+		ok -> message_handler:done(Parent);
+		{error, Reason} -> message_handler:error(Parent, self())
+	    end,
 	    loop(Parent, Socket)
     end.
 
 do_send(Socket, Type, Msg) ->
     case {Type, Msg} of 
 	{keep_alive, _} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,0>>);
+	    gen_tcp:send(Socket, <<0,0,0,0>>);			
 	{choke, _} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,0>>);
-	   %%  piece_uploader:send_event(Grandparent, is_choked, true);
+	    gen_tcp:send(Socket, <<0,0,0,1,0>>);
 	{unchoke, _} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,1>>);
-	   %%  piece_uploader:send_event(Grandparent, is_choked, false);
+	    gen_tcp:send(Socket, <<0,0,0,1,1>>);
 	{am_interested, true} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,2>>);
+	    gen_tcp:send(Socket, <<0,0,0,1,2>>);
 	{am_interested, false} ->
-	    ok = gen_tcp:send(Socket, <<0,0,0,1,3>>);
+	    gen_tcp:send(Socket, <<0,0,0,1,3>>);
 	{have, Piece_index} ->
-	    ok = gen_tcp:send(Socket, 
-			      <<0,0,0,5,4, Piece_index:32/integer-big>>);
+	    gen_tcp:send(Socket, <<0,0,0,5,4, Piece_index:32/integer-big>>);
 	{bitfield, Bitfield_in_list} ->
-	    ok = gen_tcp:send(Socket, handle_bitfield(Bitfield_in_list));
+	    gen_tcp:send(Socket, handle_bitfield(Bitfield_in_list));
 	{request, [Index, Begin, Length]} ->
-	    ok = gen_tcp:send(Socket, 
-			      <<0,0,0,13,6, 
-				Index:32/integer-big,
-				Begin:32/integer-big,
-				Length:32/integer-big>>);
+	    gen_tcp:send(Socket, 
+			 <<0,0,0,13,6, 
+			   Index:32/integer-big,
+			   Begin:32/integer-big,
+			   Length:32/integer-big>>);
 	{piece, [Index, Begin, Block]} ->
-	    ok = gen_tcp:send(Socket, handle_piece(Index, Begin, Block));
+	    gen_tcp:send(Socket, handle_piece(Index, Begin, Block));
 	{cancel, [Index, Begin, Length]} ->
-	    ok = gen_tcp:send(Socket, 
-			      <<0,0,0,13,8,
-				Index:32/integer-big,
-				Begin:32/integer-big,
-				Length:32/integer-big>>);
+	    gen_tcp:send(Socket, 
+			 <<0,0,0,13,8,
+			   Index:32/integer-big,
+			   Begin:32/integer-big,
+			   Length:32/integer-big>>);
 	{port, Listen_port} ->
-	    ok = gen_tcp:send(Socket,
-			      <<0,0,0,3,9,Listen_port:16>>)
+	    gen_tcp:send(Socket, <<0,0,0,3,9,Listen_port:16>>)
     end.
 
 handle_bitfield(Bitfield_in_list) ->
