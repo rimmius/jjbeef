@@ -136,10 +136,7 @@ update_peer(Tid, Peer_id, Field, Value) ->
 %%--------------------------------------------------------------------
 
 delete_peer(Tid, Peer_id)->
-    case ets:lookup(Tid, Peer_id) of
-	[] -> io:format("peer did not exist");
-	[_Object] -> ets:delete(Tid, Peer_id)
-    end.
+    ets:delete(Tid, Peer_id).
 
 %%--------------------------------------------------------------------
 %% Function: read_field/3
