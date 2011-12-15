@@ -16,8 +16,7 @@
 %%% Exports 
 %%%--------------------------------------------------------------------- 
 %%% start()
-%%%   spawns a new process running the init method
-%%    and returns its PID.
+%%%   spawns a new process running the init method  and returns its PID.
 %%%--------------------------------------------------------------------- 
 %%% init()
 %%%   creates an ets table to store the pieces being downloaded
