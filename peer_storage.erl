@@ -15,7 +15,6 @@
 %%%--------------------------------------------------------------------- 
 %%% init()
 %%%   creates an ets table to store the pieces being downloaded
-%%%   returns the table id of the created table 
 %%%--------------------------------------------------------------------- 
 
 -module(peer_storage).
@@ -33,7 +32,6 @@
 %%    port: An integer (default is undefined).    
 %%    request: A string (default is undefined).
 %%----------------------------------------------------------------------
-
 
 -record(peer, {peerid = undefined, interested = 0, choke = 1, 
 	       ip = undefined, socket = undefined,
