@@ -13,15 +13,14 @@
 %%% that piece will be moved back to the piece storage so it can be 
 %%% requested for downloaded again.
 %%%--------------------------------------------------------------------- 
-%%% Exports start/0
-%%%         init/0
+%%% Exports 
 %%%--------------------------------------------------------------------- 
 %%% start()
 %%%   spawns a new process running the init method
+%%    and returns its PID.
 %%%--------------------------------------------------------------------- 
 %%% init()
 %%%   creates an ets table to store the pieces being downloaded
-%%%   returns the TableID of the created table 
 %%%--------------------------------------------------------------------- 
 
 -module(downloading_storage).
