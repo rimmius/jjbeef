@@ -1,6 +1,22 @@
+%%%---------------------------------------------------------------------
 %%% Created by: Eva-Lisa Kedborn, Jing Liu
 %%% Creation date: 2011-11-08
-%%% This module creates a table which stores peer info.
+%%%--------------------------------------------------------------------- 
+%%% Description module peer_storage
+%%%--------------------------------------------------------------------- 
+%%% The peer storage is for storing peers and information about them.
+%%  It only stores peers that we are currently connected to.
+%%%--------------------------------------------------------------------- 
+%%% Exports
+%%%--------------------------------------------------------------------- 
+%%% start()
+%%%   spawns a new process running the init method
+%%%   returns a pid
+%%%--------------------------------------------------------------------- 
+%%% init()
+%%%   creates an ets table to store the pieces being downloaded
+%%%   returns the table id of the created table 
+%%%--------------------------------------------------------------------- 
 
 -module(peer_storage).
 -export([start/0, init/0]).
@@ -23,16 +39,8 @@
 	       ip = undefined, socket = undefined,
 	       port = undefined, request = undefined}).
 
-
 start() ->
     spawn(?MODULE, init, []).
-
-%%--------------------------------------------------------------------
-%% Function:init/0
-%% Purpose: create an ets table for peer info storage
-%% Args:empty
-%% Returns: TableId of peer table
-%%-------------------------------------------------------------------- 
 
 init() ->
     Tid = ets:new(peer_table, [{keypos, #peer.peerid}]),
