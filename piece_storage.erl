@@ -30,8 +30,8 @@ init(List, File_name) ->
 		_Key1 ->
 		    remove_pieces_we_have(Reference, Key, Piece_table), 
 		    dets:close(Reference),
-		    Piece_table_size = ets:info(Piece_table, size),
-		    loop(Piece_table, Piece_table_size)
+		    %% Piece_table_size = ets:info(Piece_table, size),
+		    loop(Piece_table, length(List))
             end
     end.
 

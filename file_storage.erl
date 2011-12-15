@@ -12,7 +12,7 @@ start(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list,
 init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, 
      Piece_storage_pid, Dets_name, Path) ->
     %% io:format("~n~nPiece_length=~w~n~n", [Piece_length]),
-    %% {ok, Dets_table} = dets:open_file(Dets_name, {file, Dets_name}),
+    
     case Path of
 	[] ->
 	    New_path = "./";
@@ -25,31 +25,60 @@ init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list,
 	    end
     end,
     Table_id = ets:new(torrent, [ordered_set]),
-    %% dets:close(Dets_table),
-    Data = initiate_data(0, length(List_of_pieces)),
-    loop(Dl_storage_pid, Files, Data, Table_id, length(List_of_pieces), 
+    {ok, Dets_table} = dets:open_file(Dets_name, {file, Dets_name}),
+    check_dets(Dets_table, 0, length(List_of_pieces), Table_id),
+    New_bitfield = generate_bitfield(0, length(List_of_pieces), Table_id, 
+						     Piece_length, 
+						     Dl_storage_pid, 
+						     Piece_storage_pid, full_length(Length_in_list)),
+    io:format("~w~n", [New_bitfield]),
+    dets:close(Dets_table),
+    %% Data = initiate_data(0, length(List_of_pieces)),
+    loop(Dl_storage_pid, Files, New_bitfield, Table_id, length(List_of_pieces), 
 	 Piece_length, Length_in_list, Piece_storage_pid, Dets_name, New_path).
-%% check_dets(Table_id, Dets_table, Acc, Max, Piece_length) when Acc =< Max ->
-%%     case dets:lookup(Dets_table, Acc) of
-%% 	[] ->
-%% 	    [{0, Acc}|check_dets(Table_id, Dets_table, Acc+1, Max, Piece_length)];
-%% 	[{Acc, Piece}] ->
-%% 	    Chunk_table_id = ets:new(piece, [ordered_set]),
-%% 	    insert_to_tables(Piece, Chunk_table_id, 0, Piece_length),
-%% 	    ets:insert(Table_id, {Acc, Chunk_table_id}),
-%% 	    [{1, Acc}|check_dets(Table_id, Dets_table, Acc+1, Max, Piece_length)]
-%%     end;
-%% check_dets(_Table_id, _Dets_table, _Acc, _Max, _Piece_length) ->
-%%     [].
-%% insert_to_tables([], _, _, _) ->
-%%     ok;
-%% insert_to_tables([H|T], Chunk_table_id, Acc, Piece_length) ->
-%%     ets:insert(Chunk_table_id, {(16384 * Acc), get_chunks(H, (16384 * Acc), ((16384* Acc) + 16384)), 16384}),
-%%     insert_to_tables(T,Chunk_table_id,  Acc+1, Piece_length).
-%% get_chunks(H, Acc, Max) ->
-%%     A = binary:part(H, {Acc, Max}),
-%%     <<R:(16384*8)>> = A,
-%%     R.
+check_dets(Dets_name, Acc, Length, Table_id) when Acc =< Length ->
+    case dets:lookup(Dets_name, Acc) of
+	[] ->
+	    check_dets(Dets_name, Acc+1, Length, Table_id);
+	[{Acc, Blocks}] ->
+	    List = get_blocks(list_to_binary(Blocks), 0),
+	    insert_those_blocks(List, Table_id, Acc),
+	    check_dets(Dets_name, Acc+1, Length, Table_id)
+    end;
+check_dets(_Dets, _Acc, _Length, _Table) ->
+    [].
+insert_those_blocks([], _Table_id, _Acc) ->
+    ok;
+insert_those_blocks([{<<Block:(16384*8)>>, Begin}|T], Table_id, Acc) ->
+    case ets:lookup(Table_id, Acc) of
+	[] ->
+	    Chunk_table_id = ets:new(piece, [ordered_set]),
+	    ets:insert(Chunk_table_id, {Begin, Block, (16384*8)}),
+	    ets:insert(Table_id, {Acc, Chunk_table_id});
+	[{Acc, Chunk_table_id}] ->
+	    ets:insert(Chunk_table_id, {Begin, Block, (16384*8)})
+    end,
+    insert_those_blocks(T, Table_id, Acc);
+insert_those_blocks([{<<Block/bitstring>>, Begin}], Table_id, Acc) ->
+    case ets:lookup(Table_id, Acc) of
+	[] ->
+	    Chunk_table_id = ets:new(piece, [ordered_set]),
+	    ets:insert(Chunk_table_id, {Begin, Block}), %%START HERE
+	    ets:insert(Table_id, {Acc, Chunk_table_id});
+	[{Acc, Chunk_table_id}] ->
+	    ets:insert(Chunk_table_id, {Begin, Block})
+    end.
+get_blocks(<<P:(8*16384)>>, Index) ->
+    [{<<P:(8*16384)>>, Index}];
+get_blocks(<<P:(8*16384), Rest/bitstring>>, Index) ->
+    [{<<P:(8*16384)>>, Index} | get_blocks(Rest, Index+16384)];
+get_blocks(Other, Index) ->
+    [{Other, Index}].
+
+count_bin(<<>>, Count) ->
+    Count;
+count_bin(<<_First:8, Rest/binary>>, Count) ->
+    count_bin(Rest, Count+1).
 
 initiate_data(Nr, Length) when Nr =< Length ->
     [{0, Nr}|initiate_data(Nr+1, Length)];
@@ -92,6 +121,15 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    From ! {reply, Check_piece},
 	    case Check_piece of
 		true ->
+		    case check_piece_clean(0, Index, Table_id, Chunk_table_id, Piece_length, 
+		  Dl_storage_pid, "", Piece_storage_pid, Length, full_length(Length_in_list)) of
+				0 ->
+				    ok;
+				{1, Blocks} ->
+				    {ok, Dets_name} = dets:open_file(Dets_table, {file, Dets_table}),
+				    dets:insert(Dets_name, {Index, Blocks}),
+				    dets:close(Dets_name)
+			    end,
 		    New_bitfield = generate_bitfield(0, Length, Table_id, 
 						     Piece_length, 
 						     Dl_storage_pid, 
