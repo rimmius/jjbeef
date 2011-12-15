@@ -7,7 +7,7 @@
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(message_handler).
--export([start/6, send/3, done/1, error/2, close_socket/1]).
+-export([start/6, send/3, done/1, close_socket/1]).
 -export([loop/5, init/6]).
 
 start(Requester_pid, Socket, Peer_id, 
@@ -44,9 +44,6 @@ send(Pid, Type, Msg) ->
 done(Pid) ->
     Pid ! msg_done.
 
-error(Pid, From) ->
-    Pid ! {error, From}.
-
 close_socket(Pid) ->
     Pid ! {close_socket, self()},
     receive
@@ -77,12 +74,6 @@ loop(Socket, Peer_id, Msg_recver_pid, Msg_sender_pid, Send_requests) ->
 %% 	    end;
 	{close_socket, From} ->	    
 	    From ! {reply, gen_tcp:close(Socket)};
-	{error, Msg_recver_pid} ->
-	    gen_tcp:close(Socket),
-	    exit(self(), kill);
-	{error, Msg_sender_pid} ->
-	    gen_tcp:close(Socket),
-	    exit(self(), kill);
 	{'EXIT', _Pid, _Reason} ->
 	    gen_tcp:close(Socket),
 	    exit(self(), kill)
