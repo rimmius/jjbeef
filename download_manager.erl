@@ -69,7 +69,8 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{'EXIT', Peers_pid, Reason} ->
 	    io:format("Peerspid crashed!~w~n", [Reason]),
-	    exit(self(), kill)
+	    exit(self(), kill);
+	stop -> ok
     after 3000 ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive

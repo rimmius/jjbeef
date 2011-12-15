@@ -162,7 +162,8 @@ am_unchoked_interested_unrequested(timeout, State) ->
 
 %% state 3-2
 am_unchoked_interested_requested(am_choked, State) ->
-    {next_state, am_choked_interested, State, 120000};
+    {stop, normal, State};
+    %% {next_state, am_choked_interested, State, 120000};
 am_unchoked_interested_requested(am_unchoked, State) ->
 	%% problem domain
     {next_state, am_unchoked_interested_requested, State, 1000};	

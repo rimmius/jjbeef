@@ -75,15 +75,15 @@ get_blocks(<<P:(8*16384), Rest/bitstring>>, Index) ->
 get_blocks(Other, Index) ->
     [{Other, Index}].
 
-count_bin(<<>>, Count) ->
-    Count;
-count_bin(<<_First:8, Rest/binary>>, Count) ->
-    count_bin(Rest, Count+1).
+%% count_bin(<<>>, Count) ->
+%%     Count;
+%% count_bin(<<_First:8, Rest/binary>>, Count) ->
+%%     count_bin(Rest, Count+1).
 
-initiate_data(Nr, Length) when Nr =< Length ->
-    [{0, Nr}|initiate_data(Nr+1, Length)];
-initiate_data(_Nr, _Length) ->
-    [].
+%% initiate_data(Nr, Length) when Nr =< Length ->
+%%     [{0, Nr}|initiate_data(Nr+1, Length)];
+%% initiate_data(_Nr, _Length) ->
+%%     [].
 loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, 
      Length_in_list, Piece_storage_pid, Dets_table, New_path) ->
     receive
@@ -136,6 +136,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 						     Piece_storage_pid, full_length(Length_in_list)),
 		    case is_finished(New_bitfield, 0, Length-1) of
 			true ->
+			    file:delete(Dets_table),
 			    case length([H|T]) =:= 1 of
 				true ->
 				    {ok , Io} = file:open(New_path ++ H, [write]),
@@ -172,13 +173,26 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
 		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path);
 	{request, get_piece, [Index, Begin, Request_length], From} ->
-	    io:format("~n~n~n~nGET_PIECE LENGTH=~w~n~n", [Request_length]),
 	    case Request_length of
 		16384 ->
 		    [{Index, Chunk_table_id}] = ets:lookup(Table_id, Index),
 		    From ! {reply, get_piece(Begin, Chunk_table_id)};
 		_ ->
-		    From ! {error, false}
+		    case Index =:= Length-1 of
+			true ->
+			    Full_length_ = full_length(Length_in_list),
+			    Last_piece_l = Full_length_ rem Piece_length,
+			    Last_chunk_l = Last_piece_l rem 16384,
+			    case Begin =:= (Last_piece_l - Last_chunk_l) of
+				true ->
+				    [{Index, Chunk_table_id}] = ets:lookup(Table_id, Index),
+				    From ! {reply, get_piece(Begin, Chunk_table_id)};
+				_ ->
+				    From ! {error, false}
+			    end;
+			_ ->
+			    From ! {error, false}
+		    end
 	    end,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
 		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path);
@@ -424,8 +438,8 @@ get_piece(Begin, Chunk_table_id) ->
     case ets:lookup(Chunk_table_id, Begin) of
 	[] ->
 	    {error, false};
-	[{_Begin, Block, _Length_of_block}] ->
-	    {ok, Block}
+	[{_Begin, Block, Length_of_block}] ->
+	    {ok, <<Block:Length_of_block>>}
     end.
 
 check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length, 

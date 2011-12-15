@@ -135,8 +135,8 @@ is_unchoked_interested_requested(timeout, State) ->
 	    io:format("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!~n~n"),
     
 	    case Result of
-		{ok, Block} ->  
-		    message_handler:send(State#state.msg_handler, piece, [Index, Begin, <<Block:(16384*8)>>]),
+		{ok, Block_in_bin} ->  
+		    message_handler:send(State#state.msg_handler, piece, [Index, Begin, Block_in_bin]),
 		    io:format("~n**piece_uploader~w** piece replied~n", [self()]);
 		{error, _Reason} -> %%TODO
 		    ok
