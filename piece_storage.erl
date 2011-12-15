@@ -23,10 +23,16 @@ init(List, File_name) ->
 	    loop(Piece_table, length(List));
 	{ok, Reference} -> 
 	    Key = dets:first(Reference),
-	    remove_pieces_we_have(Reference, Key, Piece_table), 
-	    dets:close(Reference),
-	    Piece_table_size = ets:info(Piece_table, size),
-	    loop(Piece_table, Piece_table_size)
+	    case Key of
+		'$end_of_table' -> 
+		    io:format("Table is empty~n"),
+		    loop(Piece_table, length(List));
+		_Key1 ->
+		    remove_pieces_we_have(Reference, Key, Piece_table), 
+		    dets:close(Reference),
+		    Piece_table_size = ets:info(Piece_table, size),
+		    loop(Piece_table, Piece_table_size)
+            end
     end.
 
 %%--------------------------------------------------------------------
