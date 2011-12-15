@@ -1,19 +1,33 @@
+%%%---------------------------------------------------------------------
 %%% Created by: Eva-Lisa Kedborn, Jing Liu
 %%% Rarest piece algorithm: Fredrik Gustafsson
 %%% Creation date: 2011-11-16
+%%%--------------------------------------------------------------------- 
+%%% Description module piece_storage
+%%%--------------------------------------------------------------------- 
+%%% Stores the pieces we want to download, piece index, piece hash and
+%%% a list of peers who has that piece. Everytime a process requests a
+%%% piece for downloaded is is being removed so no other process will
+%%% download the same piece. 
+%%%--------------------------------------------------------------------- 
+%%% Exports
+%%%--------------------------------------------------------------------- 
+%%% start(List of hashes, Name of the dets table)
+%%%   spawns a new process running the init method
+%%%   returns a pid
+%%%--------------------------------------------------------------------- 
+%%% init(List of hashes, Name of the dets table)
+%%%   checks if we have existing pieces of the *.torrent file stored in
+%%%   a dets table on the computer if so we create an ets table to store 
+%%%   only the pieces we have left to download if not the table will
+%%%   contain all the pieces from the *.torrent file.
+%%%--------------------------------------------------------------------- 
 
 -module(piece_storage).
 -export([start/2, init/2]).
 
 start(List, File_name) ->
     spawn(?MODULE, init, [List, File_name]).
-
-%%--------------------------------------------------------------------
-%% Function: init/2
-%% Purpose: Check if we have an existing dets table with pieces 
-%%          previously downloaded.
-%% Args: List of piece hashes, file name of dets table.  
-%%--------------------------------------------------------------------
 
 init(List, File_name) ->
     Piece_table = initiate_table(List),
@@ -30,7 +44,6 @@ init(List, File_name) ->
 		_Key1 ->
 		    remove_pieces_we_have(Reference, Key, Piece_table), 
 		    dets:close(Reference),
-		    %% Piece_table_size = ets:info(Piece_table, size),
 		    loop(Piece_table, length(List))
             end
     end.
