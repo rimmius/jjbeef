@@ -1,9 +1,28 @@
-%%% @author  <Jing@LENOVO-PC>
-%%% @copyright (C) 2011, 
-%%% @doc
-%%%
-%%% @end
-%%% Created : 18 Oct 2011 by  <lenovo@LENOVO-PC>
+%%%---------------------------------------------------------------------
+%%% Created by: Jing Liu, Fredrik Gustafsson
+%%%--------------------------------------------------------------------- 
+%%% Description module sha
+%%%--------------------------------------------------------------------- 
+%%% This module provides functions for sha1 hashing and url encoding.
+%%%--------------------------------------------------------------------- 
+%%% Exports 
+%%%--------------------------------------------------------------------- 
+%%% sha1hash(Data)
+%%%    sha1hashes data and returns a list of intgers on the base 16
+%%%--------------------------------------------------------------------- 
+%%% sha1raw(Data)
+%%%   sha1hashes the data and returns a list of integers same with 	
+%%%   the binary value
+%%%---------------------------------------------------------------------
+%%% urlencode(Sha)
+%%%   library function for url encoding
+%%%---------------------------------------------------------------------
+%%% chunk_it_up(List)
+%%%   breaks a 20 bytes sha hash into chuncks of two
+%%%---------------------------------------------------------------------
+%%% shaurl(Data)
+%%%   sha1 and urlencoding combined
+%%%---------------------------------------------------------------------
 
 
 -module sha.
@@ -36,6 +55,7 @@ chunk_it_up([H|T]) ->
 	    [check_digits(http_util:hexlist_to_integer(List1))|chunk_it_up(List2)]
     end.
 
+%% inner function for url encoding
 check_digits(N) when (N >= 65) and (N =< 90) ->
     [N];
 check_digits(N) when (N >= 97) and (N =< 122) ->
