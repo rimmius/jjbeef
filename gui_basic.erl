@@ -5,12 +5,14 @@
 %%%--------------------------------------------------------------------- 
 %%% Description module downloading_manager
 %%%--------------------------------------------------------------------- 
-%%% What this module does...
+%%% This Module is the main controller module for the GUI. 
 %%%--------------------------------------------------------------------- 
 %%% Exports 
 %%%--------------------------------------------------------------------- 
 %%% start()
-%%%   what it does...
+%%%   Produces  GUI application and the loop for handling all events
+%%%   in the application.
+%%      
 %%%--------------------------------------------------------------------- 
 
 -module(gui_basic).
@@ -29,9 +31,9 @@ start() ->
 
 %%--------------------------------------------------------------------
 %% Function: createUniqueId/0
-%% Purpose: Creates a unique id
-%% Args: 
-%% Returns:
+%% Purpose: Checks and Creates a unique id
+%% Args: no args
+%% Returns: Id
 %%--------------------------------------------------------------------
 
 createUniqueId() ->
@@ -39,9 +41,10 @@ createUniqueId() ->
 
 %%--------------------------------------------------------------------
 %% Function: check_length/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Checks the length of the until it is 20bits, used throught the
+%%  duration of the application. Adds a random number at the end of the unique id.
+%% Args: Id 
+%% Returns: Id
 %%--------------------------------------------------------------------
 
 check_length(Id) when length(Id) =:= 20 ->
@@ -51,9 +54,11 @@ check_length(Id) ->
 
 %%--------------------------------------------------------------------
 %% Function: create_window/0
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: This creates the window frame
+%% Args: no args
+%% Returns: Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
+     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
+     CompleteText1105, But101, StaticBitmap_Dl, HashText1106
 %%--------------------------------------------------------------------
 
 create_window() ->
@@ -67,7 +72,8 @@ create_window() ->
     %% ICON for Frame
     Icon = wxIcon:new("glogg.ico", [{type, ?wxBITMAP_TYPE_ICO}]),
     wxFrame:setIcon(Frame, Icon),
-    
+   
+    %%Create StatusBar
     StatusBar =  wxFrame:createStatusBar(Frame,[{style, ?wxSB_RAISED}]),
     wxStatusBar:setFieldsCount(StatusBar, 4), 
     wxFrame:connect(Frame, close_window),
@@ -199,6 +205,7 @@ create_window() ->
 	=  gui_advance:start(MainPanel, OuterSizer),
     wxPanel:setSizer(MainPanel, OuterSizer),
     
+    %%Connects widgets to events.
     wxToolBar:connect(ToolBar,  command_menu_selected, []),
     wxToolBar:connect(ToolBar, command_left_click),
     wxPanel:connect(MainPanel, command_button_clicked),
@@ -211,15 +218,20 @@ create_window() ->
 
 %%--------------------------------------------------------------------
 %% Function: loop/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: This is the main loop for th GUI, which handles all events within
+%% the GUI and recieved from the backend processes of the application. 
+%% Args:  {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
+     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
+ CompleteText1105, But101, StaticBitmap_Dl,  HashText110}, Download_pid, States
+%% Returns:loop(State, Download_Pid)
 %%--------------------------------------------------------------------
 
 loop(State, Download_pid) ->
+    
+    %%Divides up the State, into variables to be used.
     {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
      TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106} = State,
+     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106} = State,  
    
     receive 
    	#wx{event=#wxClose{}} ->
@@ -227,7 +239,7 @@ loop(State, Download_pid) ->
    	    ok = wxFrame:setStatusText(Frame, "Closing...",[]),
 	    wxWindow:destroy(State), 
 	    ok;
-        
+        %%Handles the opening of Torrent File.
 	#wx{id= ?wxID_OPEN, event=#wxCommand{type=command_menu_selected}} ->
 	    io:format("The Open button works!~n"),
 	    
@@ -250,9 +262,9 @@ loop(State, Download_pid) ->
 			    loop(State, Download_pid);       
 			_ -> 
 			    
-			    DownloadPid_new = download_manager:start(Path, 
+			    DownloadPid_new = download_manager:start(Path,  %%Initializes the download manager
 								     self()),
-			    link(DownloadPid_new),
+			    link(DownloadPid_new),    %%Links the Downlaod Manager
                           
                             wxWindow:show(StaticBitmap_Dl, [{show, true}]), 
                             wxWindow:refresh(Frame),
@@ -371,7 +383,8 @@ loop(State, Download_pid) ->
 		    wxStatusBar:setStatusText(StatusBar, "Welcome to Glögg!", 
 					      [{number, 0}])
 	    end;
-	
+
+	%%Handles the x button click.
 	#wx{id = 101, event=#wxCommand{type = command_button_clicked}} ->
 	    io:format("Torrent download deleted ~n"),
 	    wxGauge:setValue(NormalGauge, 0),
@@ -390,12 +403,14 @@ loop(State, Download_pid) ->
 		    spawn(fun() -> close_for_now(Download_pid) end),
 		    loop(State, not_started)
 	    end;	
-	
+
+         %%Handles the Help Event.	
 	#wx{id= ?wxID_HELP, event=#wxCommand{type=command_menu_selected}} ->
 	    io:format("The HELP icon works!"),
 	    wx_misc:launchDefaultBrowser("http://jjbeef.yolasite.com/"),
-	    loop(State, Download_pid);	
+	    loop(State, Download_pid);
 	
+	%%Handles About info	
 	#wx{id= ?wxID_ABOUT, event=#wxCommand{type=command_menu_selected}} ->
 	    gui_info:start(Frame),
 	    loop(State, Download_pid);	
@@ -409,9 +424,9 @@ loop(State, Download_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: close_for_now/1
-%% Purpose: 
+%% Purpose: Delays the stop for the Download_Pid
 %% Args: 
-%% Returns:
+%% Returns:returns a stop for the Download_pid process ID.
 %%--------------------------------------------------------------------
 
 close_for_now(Download_pid) ->
@@ -422,9 +437,9 @@ close_for_now(Download_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: create_time/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Creates a string of the current hours and minutes.
+%% Args: no args
+%% Returns:returns current time in in string format.
 %%--------------------------------------------------------------------
 
 create_time() ->
@@ -434,9 +449,9 @@ create_time() ->
 
 %%--------------------------------------------------------------------
 %% Function: create_date_and_time/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Creates a string representation of the current date and time.
+%% Args: no args
+%% Returns: returns the current date and time in string format.
 %%--------------------------------------------------------------------
  
 create_date_and_time() ->     
