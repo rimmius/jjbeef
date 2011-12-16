@@ -78,7 +78,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
 		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
 	{request, c_downloaded_pieces, [], From} ->
-	    From ! {reply, get_amount_of_pieces(0, Length, Bitfield)},
+	    From ! {reply, (Length - get_amount_of_pieces(0, Length, Bitfield))},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
 		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
 	{request, get_bitfield, [], From} ->
