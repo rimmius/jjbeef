@@ -197,13 +197,13 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid,
 	    From ! {reply, length(Children)},
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid,
 		 Dl_storage_pid, Children, Length);
-	{'EXIT', Peer_storage_pid, Reason} -> 
+	{'EXIT', Peer_storage_pid, _Reason} -> 
 	    loop(Dl_pid, peer_storage_crash, File_storage_pid, 
 		 Piece_storage_pid, Dl_storage_pid, Children, Length);		
-	{'EXIT', Piece_storage_pid, Reason} ->
+	{'EXIT', Piece_storage_pid, _Reason} ->
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, 
 		 piece_storage_crash, Dl_storage_pid, Children, Length);
-	{'EXIT', File_storage_pid, Reason} ->
+	{'EXIT', File_storage_pid, _Reason} ->
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, 
 		 Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->
