@@ -201,7 +201,7 @@ create_window() ->
     wxSizer:layout(BasicSizer),
     wxSizer:layout(OuterSizer),
     wxPanel:setSizer(DL_Panel, FlexGridSizer),
-    {TorNameText1201, CreateText1104, CompleteText1105,  HashText1106, TpText1204,  CpText1205, TSizeText1103} 	=  gui_advance:start(MainPanel, OuterSizer),
+    {TorNameText1201, CreateText1104, CompleteText1105,  HashText1106, TpText1204,  CpText1205} 	=  gui_advance:start(MainPanel, OuterSizer),
     wxPanel:setSizer(MainPanel, OuterSizer),
     
     %%Connects widgets to events.
@@ -213,7 +213,7 @@ create_window() ->
     wxWindow:show(Frame),
     {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
      TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl, HashText1106, TpText1204,  CpText1205, TSizeText1103}.
+     CompleteText1105, But101, StaticBitmap_Dl, HashText1106, TpText1204,  CpText1205}.
 
 %%--------------------------------------------------------------------
 %% Function: loop/2
@@ -230,7 +230,7 @@ loop(State, Download_pid) ->
     %%Divides up the State, into variables to be used.
     {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
      TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106,  TpText1204,  CpText1205, TSizeText1103} = State,  
+     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106,  TpText1204,  CpText1205} = State,  
    
     receive 
    	#wx{event=#wxClose{}} ->
@@ -328,12 +328,12 @@ loop(State, Download_pid) ->
 	    wxTopLevelWindow:setSize(Frame, 600, 500),
 	    loop(State, Download_pid);
 
-	{hash, {Hash, Total_pieces, File_size}} ->
+	{hash, {Hash, Total_pieces}} ->
 		 Hash_string = "Hash: " ++ Hash,
 		wxStaticText:setLabel(HashText1106, Hash_string),
 		Total_pieces_string = "Total Pieces: " ++ integer_to_list(Total_pieces),
 		wxStaticText:setLabel(TpText1204, Total_pieces_string),  
-		wxStaticText:setLabel(TSizeText1103, integer_to_list(File_size)),
+	
 		wxWindow:refresh(Frame),
 		loop(State, Download_pid);
 	    
