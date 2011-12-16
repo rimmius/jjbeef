@@ -3,9 +3,11 @@
 %%% Creation date: 2011-10-22
 %%% Refactored date: 2011-11-23
 %%%--------------------------------------------------------------------- 
-%%% Description module downloading_manager
+%%% Description module of gui_info
 %%%--------------------------------------------------------------------- 
-%%% What this module does...
+%%% This module display information about the Developing team  and the 
+%%% Glögg application.
+%%% 
 %%%--------------------------------------------------------------------- 
 
 -module(gui_info).
@@ -14,9 +16,9 @@
 
 %%--------------------------------------------------------------------
 %% Function: start/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Starts the a
+%% Args: Parents
+%% Returns: -
 %%--------------------------------------------------------------------
 
 start(Parents) ->
@@ -24,9 +26,9 @@ start(Parents) ->
 
 %%--------------------------------------------------------------------
 %% Function: new_mini_frame/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: This creates miniframe and displays the miniframe.
+%% Args: Parents
+%% Returns:-
 %%--------------------------------------------------------------------
 
 new_mini_frame(Parents) ->

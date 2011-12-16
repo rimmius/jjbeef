@@ -43,7 +43,7 @@ create_advance_feature(MainPanel, OuterSizer) ->
    
       
     wxSizer:add(OuterSizer, Notebook, [{proportion, 0}, {flag, ?wxEXPAND}]),
-    {TorNameText1201, CreateText1104, CompleteText1105, HashText1106}.
+    {TorNameText1201, CreateText1104, CompleteText1105, HashText1106, TpText1204, CpText1205, TSizeText1103}.
 
 %%--------------------------------------------------------------------
 %% Function: file_info_page/1
