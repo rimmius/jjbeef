@@ -3,7 +3,7 @@
 %%% Creation date: 2011-10-19
 %%% Refactored date: 2011-11-03
 %%%--------------------------------------------------------------------- 
-%%% Description module gui_basic
+%%% Description module downloading_manager
 %%%--------------------------------------------------------------------- 
 %%% This Module is the main controller module for the GUI. 
 %%%--------------------------------------------------------------------- 
@@ -201,8 +201,7 @@ create_window() ->
     wxSizer:layout(BasicSizer),
     wxSizer:layout(OuterSizer),
     wxPanel:setSizer(DL_Panel, FlexGridSizer),
-    {TorNameText1201, CreateText1104, CompleteText1105,  HashText1106} 
-	=  gui_advance:start(MainPanel, OuterSizer),
+    {TorNameText1201, CreateText1104, CompleteText1105,  HashText1106, TpText1204,  CpText1205, TSizeText1103} 	=  gui_advance:start(MainPanel, OuterSizer),
     wxPanel:setSizer(MainPanel, OuterSizer),
     
     %%Connects widgets to events.
@@ -214,16 +213,15 @@ create_window() ->
     wxWindow:show(Frame),
     {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
      TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl, HashText1106}.
+     CompleteText1105, But101, StaticBitmap_Dl, HashText1106, TpText1204,  CpText1205, TSizeText1103}.
 
 %%--------------------------------------------------------------------
 %% Function: loop/2
 %% Purpose: This is the main loop for th GUI, which handles all events within
 %% the GUI and recieved from the backend processes of the application. 
 %% Args:  {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
-%%     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-%% CompleteText1105, But101, StaticBitmap_Dl,  HashText110}, Download_pid,
-%% States
+%% TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
+%%CompleteText1105, But101, StaticBitmap_Dl,  HashText110}, Download_pid, States
 %% Returns:loop(State, Download_Pid)
 %%--------------------------------------------------------------------
 
@@ -232,7 +230,7 @@ loop(State, Download_pid) ->
     %%Divides up the State, into variables to be used.
     {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
      TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106} = State,  
+     CompleteText1105, But101, StaticBitmap_Dl,  HashText1106,  TpText1204,  CpText1205, TSizeText1103} = State,  
    
     receive 
    	#wx{event=#wxClose{}} ->
@@ -330,23 +328,29 @@ loop(State, Download_pid) ->
 	    wxTopLevelWindow:setSize(Frame, 600, 500),
 	    loop(State, Download_pid);
 
-	{hash, Hash} ->
-	    wxStaticText:setLabel(HashText1106, Hash),
-	    wxWindow:refresh(Frame),
-	    loop(State, Download_pid);
+	{hash, {Hash, Total_pieces, File_size}} ->
+		 Hash_string = "Hash: " ++ Hash,
+		wxStaticText:setLabel(HashText1106, Hash_string),
+		Total_pieces_string = "Total Pieces: " ++ integer_to_list(Total_pieces),
+		wxStaticText:setLabel(TpText1204, Total_pieces_string),  
+		wxStaticText:setLabel(TSizeText1103, integer_to_list(File_size)),
+		wxWindow:refresh(Frame),
+		loop(State, Download_pid);
 	    
-	{tracker, Track} ->
-	    wxStaticText:setLabel(TrackText, Track),
-	    wxWindow:refresh(Frame),
- 	    loop(State, Download_pid);
+	     {tracker, Track} ->
+		wxStaticText:setLabel(TrackText, Track),
+		wxWindow:refresh(Frame),
+		loop(State, Download_pid);
 	
-        {percentage, Percent} ->
+	     {percentage, Percent, Dl_pieces} ->
 	    wxGauge:setValue(NormalGauge, Percent),
 	    PText1 =  lists:concat([Percent]),
 	    PText2 =   "% Complete",
             StText = PText1 ++ PText2,
 	    wxStaticText:setLabel(CalcText, StText),
 	    wxStatusBar:setStatusText(StatusBar, StText, [{number, 3}]),
+	    Pieces_left_string = "Pieces Left: " ++ integer_to_list(Dl_pieces),
+	    wxStaticText:setLabel(CpText1205, Pieces_left_string),
 	    case  wxGauge:getValue(NormalGauge) of 
 		100 ->
 		    Date_time_string = "Completed on: " ++ 
