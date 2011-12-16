@@ -71,10 +71,10 @@ loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid,
 		    loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, 
 			 Dl_pid, File_storage_pid);
 		_ ->
-		    io:format("connect to tracker~n"),
+		    io:format("~nCONNECT TO TRACKER~n"),
 		    {We_have, Uploaded} = get_current_pieces(File_storage_pid),
 		    Left = Length - We_have,
-		    io:format("~n~nLeft=~w~n~n", [Left]),
+		    io:format("~n~nBits left=~w~n~n", [Left]),
 		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" 
 						 ++ Info ++ "&peer_id=" 
 						 ++ My_id ++ "&port=" 
