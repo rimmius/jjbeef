@@ -1,33 +1,13 @@
-%%%---------------------------------------------------------------------
-%%% Created by: Bruce Yinhe
-%%% Creation date: 2011-10-18
-%%%--------------------------------------------------------------------- 
-%%% Description module handshake_handler
-%%%--------------------------------------------------------------------- 
-%%% This module takes a socket and send/receive handshake from it.
-%%% The functions are called outside by other modules
-%%%--------------------------------------------------------------------- 
-%%% Exports 
-%%%--------------------------------------------------------------------- 
-%%% send_handshake({ip, Host, Port}, My_info_hash, My_peer_id)
+%%%-------------------------------------------------------------------
+%%% @author  <Bruce@THINKPAD>
+%%% @copyright (C) 2011, 
+%%% @doc
 %%%
-%%%   connects to a IP/Port, and send a handshake. If a socket is provided
-%%%   rather than the ip/port, send a handshake directly
-%%%   returns  {ok, Socket} | {error, Reason}  
-%%%--------------------------------------------------------------------- 
-%%% recv_handshake(Socket, My_info_hash)
-%%%
-%%%   receives a handshake from the socket
-%%%   returns  {ok, {Socket, Peer_id}} | {error, false_info_hash}
-%%%--------------------------------------------------------------------
+%%% @end
+%%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
+%%%-------------------------------------------------------------------
 -module(handshake_handler).
-
-%% API
 -export([send_handshake/3, recv_handshake/2]).
-
-%%%===================================================================
-%%% API
-%%%===================================================================
 
 send_handshake({ip, Host, Port}, My_info_hash, My_peer_id) ->    
     case gen_tcp:connect(Host, Port, [binary, {active, false},
@@ -55,8 +35,7 @@ recv_handshake(Socket, My_info_hash) ->
 		{ok, <<_Reserved:64,
 		       Info_hash:160,
 		       Peer_id:160>>} ->
-		    case  binary_to_list(<<Info_hash:160>>) =:= 
-			binary_to_list(My_info_hash) of
+		    case  binary_to_list(<<Info_hash:160>>) =:= binary_to_list(My_info_hash) of
 			true ->
 			    {ok, {Socket, Peer_id}};
 			false ->
