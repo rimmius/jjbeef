@@ -33,13 +33,11 @@ init(List, File_name) ->
     Piece_table = initiate_table(List),
     case dets:open_file(File_name) of
 	{error, _Reason} -> 
-	    io:format("No table exists~n"),
 	    loop(Piece_table, length(List));
 	{ok, Reference} -> 
 	    Key = dets:first(Reference),
 	    case Key of
 		'$end_of_table' -> 
-		    io:format("Table is empty~n"),
 		    loop(Piece_table, length(List));
 		_Key1 ->
 		    remove_pieces_we_have(Reference, Key, Piece_table), 
@@ -49,7 +47,7 @@ init(List, File_name) ->
     end.
 
 %%--------------------------------------------------------------------
-%% Function: remove_pieces_we_have/2
+%% Function: remove_pieces_we_have/3
 %% Purpose: Delete the pieces we have already downloaded
 %% Args: Reference to dets table where we store downloaded pieces,
 %%       the key of the entry we want to lookup, piece table  
