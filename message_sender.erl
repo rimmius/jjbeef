@@ -1,11 +1,22 @@
-%%%-------------------------------------------------------------------
-%%% @author  <Bruce@THINKPAD>
-%%% @copyright (C) 2011, 
-%%% @doc
+%%%---------------------------------------------------------------------
+%%% Created by: Bruce Yinhe
+%%% Creation date: 2011-10-28
+%%%--------------------------------------------------------------------- 
+%%% Description module message_sender
+%%%--------------------------------------------------------------------- 
 %%% This module sends messages to the socket
-%%% @end
-%%% Created : 16 Dec 2011 by  <Bruce@THINKPAD>
-%%%-------------------------------------------------------------------
+%%%--------------------------------------------------------------------- 
+%%% Exports 
+%%%--------------------------------------------------------------------- 
+%%% start(Socket)
+%%%   starts the process
+%%%   returns Pid
+%%%--------------------------------------------------------------------- 
+%%% init(Pid, Type, Message)
+%%%   sends a message
+%%%   returms ok 
+%%%---------------------------------------------------------------------
+
 -module(message_sender).
 
 %% API
@@ -18,23 +29,9 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% starts the process
-%%
-%% @spec start(Parent, Socket) -> Pid
-%% @end
-%%--------------------------------------------------------------------
 start(Socket) ->
     spawn(?MODULE, loop, [Socket]).
 
-%%--------------------------------------------------------------------
-%% @doca
-%% sends a message
-%%
-%% @spec send(Pid, Type, Msg) -> ok
-%% @end
-%%--------------------------------------------------------------------
 send(Pid, Type, Msg) ->
     Pid ! {do_send, Type, Msg, self()},
     receive
@@ -47,12 +44,11 @@ send(Pid, Type, Msg) ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc
-%% the loop 
-%%
-%% @spec loop(Socket) -> void()
-%% @end
+%% Function: loop/1
+%% Purpose: the loop 
+%% Args: Socket 
 %%--------------------------------------------------------------------
+
 loop(Socket) ->
     receive
 	{do_send, Type, Msg, From} ->
@@ -67,12 +63,12 @@ loop(Socket) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc
-%% sends the message to the socket
-%%
-%% @spec do_send(Socket, Type, Msg) -> ok | {error, Reason}
-%% @end
+%% Function: do_send/3
+%% Purpose: sends the message to the socket 
+%% Args: Socket, Type, Msg
+%% Returns: ok | {error, Reason}
 %%--------------------------------------------------------------------
+
 do_send(Socket, Type, Msg) ->
     case {Type, Msg} of 
 	{keep_alive, _} ->
@@ -106,49 +102,51 @@ do_send(Socket, Type, Msg) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc
-%% take a bitfield in list [0,0,0,1,1,...], return a bitfield message
+%% Function: handle_bitfield/1
+%% Purpose: take a bitfield in list [0,0,0,1,1,...], return a bitfield message
 %% in binary
-%%
-%% @spec handle_bitfield(Bitfield_in_list) -> Message_in_bin
-%% @end
+%% Args: Bitfield_in_list
+%% Returns: Message_in_bin
 %%--------------------------------------------------------------------
+
 handle_bitfield(Bitfield_in_list) ->
     {Bitfield_in_bits, Len} = make_bitfield(Bitfield_in_list, 1),
     <<(Len+1):32/integer-big, 5, Bitfield_in_bits/bitstring>>.
 
 %%--------------------------------------------------------------------
-%% @doc
-%% take the piece index, begin, and block, return a piece message in
+%% Function: handle_piece/3
+%% Purpose: take the piece index, begin, and block, return a piece message in
 %% binary
-%%
-%% @spec handle_piece(Index, Begin, Block) -> Message_in_bin
-%% @end
+%% Args: Index, Begin, Block
+%% Returns: Message_in_bin
 %%--------------------------------------------------------------------
+
 handle_piece(Index, Begin, Block) ->
     Len = count_bin(Block, 0),
-    list_to_binary([<<(Len+9):32/integer-big, 7, Index:32/integer-big, Begin:32/integer-big>>, Block]).
-      
+    list_to_binary([<<(Len+9):32/integer-big, 7, Index:32/integer-big, 
+		      Begin:32/integer-big>>, Block]).
+
 %%--------------------------------------------------------------------
-%% @doc
-%% take a binary and an accumulator (from 0), return the byte size of it
-%%
-%% @spec count_bin(Binary, Count) -> Byte_size
-%% @end
+%% Function: count_bin/2
+%% Purpose: take a binary and an accumulator (from 0), return the byte 
+%%          size of it
+%% Args: Binary, Count
+%% Returns: Byte_size
 %%--------------------------------------------------------------------
+
 count_bin(<<>>, Count) ->
     Count;
 count_bin(<<_First:8, Rest/binary>>, Count) ->
     count_bin(Rest, Count+1).
 
 %%--------------------------------------------------------------------
-%% @doc
-%% take a list of bitfield [0,0,0,1,1,...], return the bitfield in binary
-%% form and a length
-%%
-%% @spec make_bitfield(Bitfield_in_list, Index) -> {Bitfield_in_bits, Len}
-%% @end
+%% Function: make_bitfield/2
+%% Purpose: take a list of bitfield [0,0,0,1,1,...], return the bitfield 
+%%          in binary form and a length
+%% Args: Bitfield_in_list, Index
+%% Returns: {Bitfield_in_bits, Len}
 %%--------------------------------------------------------------------
+
 make_bitfield([H], Index) when Index rem 8 == 0 ->
     {<<H:1>>, Index div 8};
 make_bitfield([H], Index) ->
