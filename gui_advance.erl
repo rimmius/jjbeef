@@ -38,12 +38,12 @@ create_advance_feature(MainPanel, OuterSizer) ->
     wxImageList:add(IL, Peers),
     wxNotebook:assignImageList(Notebook, IL),
     
-   {CreateText1104, CompleteText1105,  HashText1106, TSizeText1103} = file_info_page(Notebook),
+   {CreateText1104, CompleteText1105,  HashText1106} = file_info_page(Notebook),
     {TorNameText1201, TpText1204, CpText1205} = torrent_info_page(Notebook),
    
       
     wxSizer:add(OuterSizer, Notebook, [{proportion, 0}, {flag, ?wxEXPAND}]),
-    {TorNameText1201, CreateText1104, CompleteText1105, HashText1106, TpText1204, CpText1205, TSizeText1103}.
+    {TorNameText1201, CreateText1104, CompleteText1105, HashText1106, TpText1204, CpText1205}.
 
 %%--------------------------------------------------------------------
 %% Function: file_info_page/1
@@ -55,8 +55,8 @@ create_advance_feature(MainPanel, OuterSizer) ->
 
 file_info_page(Notebook) ->
     Fpage = wxPanel:new(Notebook, []),
-    FPathText1101 = wxStaticText:new(Fpage, 1101, "Filesize(in bits: ", []),
-    TSizeText1103 = wxStaticText:new(Fpage, 1103, " ", []),
+ 
+ 
     CreateText1104 = wxStaticText:new(Fpage, 1104, "Created on: ", []),
     CompleteText1105 = wxStaticText:new(Fpage, 1105, "Completed on: ", []),
     HashText1106 = wxStaticText:new(Fpage, 1106, "Hash: ", []),
@@ -67,11 +67,9 @@ file_info_page(Notebook) ->
     wxSizer:add(FileBoxSizer, FileGridSizer, [{proportion, 0}, 
 					      {flag, ?wxALIGN_LEFT}]),
     
-    wxSizer:add(FileGridSizer, FPathText1101, [{proportion, 0}, 
-						{flag, ?wxALIGN_LEFT}]),
+    wxSizer:add(FileGridSizer, 30,10, []),
     wxSizer:add(FileGridSizer, 30, 10, []),
-    wxSizer:add(FileGridSizer,  TSizeText1103, [{proportion, 0}, 
-						  {flag, ?wxALIGN_LEFT}]), 
+    wxSizer:add(FileGridSizer,  30, 10, []), 
     wxSizer:add(FileGridSizer, 30, 10, []),
     wxSizer:add(FileGridSizer, CreateText1104, [{proportion, 0}, 
 						{flag, ?wxEXPAND}]),
@@ -85,7 +83,7 @@ file_info_page(Notebook) ->
     wxPanel:setSizer(Fpage, FileBoxSizer),
     wxSizer:layout(FileBoxSizer),
     wxNotebook:addPage(Notebook, Fpage, "File Info", []),
-    {CreateText1104, CompleteText1105,  HashText1106, TSizeText1103 }.
+    {CreateText1104, CompleteText1105,  HashText1106}.
 
 %%--------------------------------------------------------------------
 %% Function: torrent_info_page/1
