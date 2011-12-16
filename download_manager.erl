@@ -76,20 +76,20 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
     after 3000 ->
 	    Peers_pid ! {get_downloaded, self()},
 	    receive
-		{reply, Downloaded} ->
+		{reply, {Downloaded, Current_pieces}} ->
 		    case Downloaded of
 			100 ->
 			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
 			    case Counter of
 				0 ->
-				    GUI_pid ! {percentage, Downloaded},
+				    GUI_pid ! {percentage, {Downloaded, Current_pieces}},
 				     loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, 1);
 				_ ->
 				    ok
 			    end;
 			_ ->
 			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
-			    GUI_pid ! {percentage, Downloaded}
+			    GUI_pid ! {percentage, {Downloaded, Current_pieces}}
 		    end
 	    end,
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter)

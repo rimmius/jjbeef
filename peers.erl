@@ -73,6 +73,8 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 	{get_downloaded, From} ->
 	    {How_much, _Uploaded} = mutex:request(File_storage_pid, how_much, []),
 	    mutex:received(File_storage_pid),
+	    Pieces_dl = mutex:request(File_storage_pid, c_downloaded_pieces, []),
+	    mutex:received(File_storage_pid),
 	    case How_much =:= 0 of
 		true ->
 		    From ! {reply, 0},
@@ -81,12 +83,15 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    Perc = How_much / Length,
 		    case Perc >= 1 of
 			true ->
-			    From ! {reply, 100};
+			    From ! {reply, {100, Pieces_dl}};
 			_ ->
-			    From ! {reply, trunc(Perc*100)}
+			    From ! {reply, {trunc(Perc*100), Pieces_dl}}
 		    end,
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length)
 	    end;
+	{amount_children, From} ->
+	    From ! {reply, length(Children)},
+	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Peer_storage_pid, Reason} -> 
 	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
 	    io:format("looping without peer_storage"),
@@ -179,7 +184,6 @@ send_handshake(Host, Port, Info, My_peer_id, Peers_pid) ->
 	    end;
 	{error, Reason} ->
 	    {error, Reason}
-	    
     end.
 
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
