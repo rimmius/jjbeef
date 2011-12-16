@@ -56,9 +56,6 @@ loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid,
     receive
 	{connect, From, H} ->
 	    io:format("CONNECTING TO TRACKER~n"),
-	    io:format(H ++ "?info_hash=" ++ Info ++ "&peer_id=" ++ My_id 
-		      ++ "&port=" ++ Port ++ "&uploaded=0&downloaded=0&left=" 
-		      ++ integer_to_list(Length) ++ "&compact=1&event=started"),
 	    {Peers, Min_time} = get_info(H ++ "?info_hash=" ++ Info 
 					 ++ "&peer_id=" ++ My_id ++ "&port=" 
 					 ++ Port 
