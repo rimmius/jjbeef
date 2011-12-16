@@ -1,31 +1,10 @@
-%%%---------------------------------------------------------------------
-%%% Copied and the modified from: 
-%%% https://github.com/logaan/erlang-bittorrent/blob
-%%% /fdfe4b87d596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
-%%% Creation date: 2011-10-07
-%%%--------------------------------------------------------------------- 
-%%% Description module bencode
-%%%--------------------------------------------------------------------- 
-%%% This module decodes and encodes information read from the *.torrent
-%%% file that is bencoded. 
-%%%--------------------------------------------------------------------- 
-%%% Exports 
-%%%--------------------------------------------------------------------- 
-%%% decode(Binary)
-%%%   decodes the binary information returned from reading the *.torrent
-%%%   file
-%%%   returns a tagged tuple {dict, Dict} with Dict being the dictonary
-%%%   in the *.torrent file.
-%%%--------------------------------------------------------------------- 
-%%% encode(Element)
-%%%   encodes to bencode as binary
-%%%   returnes bencoded information as binaries
-%%%--------------------------------------------------------------------- 
-
+%%%Creation date 111007
+%%%Copied and then modified from https://github.com/logaan/erlang-bittorrent/blob/fdfe4b87d596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
+%%%Decoding and encoding bencoded information.
 -module(bencode).
 -export([decode/1, encode/1]).
 -define(DICT, dict).
-
+%%Bencode decoding functions
 decode(<<$l, Tail/binary>>) ->
     decode_list(Tail, []);
 decode(<<$d, Tail/binary>>) ->
@@ -60,6 +39,8 @@ decode_dict(Data, New_list) ->
     {Val, T2} = decode(T1),
     decode_dict(T2, ?DICT:store(Key, Val, New_list)).
 
+
+%%Bencode encoding functions
 encode(Integer) when is_integer(Integer) ->
     Bin = list_to_binary(integer_to_list(Integer)),
     [$i, Bin, $e];

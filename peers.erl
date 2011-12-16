@@ -65,14 +65,13 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_p
 		    link(Pid),
 		    New_children = insertChild({Pid, Sock, Peer_id}, Children),
 		    From ! ok,
-		    io:format("~n~nIN THE LOOP SENT MESS BACK"),
 		    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, New_children, Length)
 	    end;
 	{update_interest, Index} ->
 	    update_interest(Children, Index),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{get_downloaded, From} ->
-	    How_much = mutex:request(File_storage_pid, how_much, []),
+	    {How_much, _Uploaded} = mutex:request(File_storage_pid, how_much, []),
 	    mutex:received(File_storage_pid),
 	    case How_much =:= 0 of
 		true ->

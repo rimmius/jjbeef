@@ -68,14 +68,16 @@ loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid,
 			 Dl_pid, File_storage_pid);
 		_ ->
 		    io:format("connect to tracker~n"),
-		    We_have = get_current_pieces(File_storage_pid),
+		    {We_have, Uploaded} = get_current_pieces(File_storage_pid),
 		    Left = Length - We_have,
 		    io:format("~n~nLeft=~w~n~n", [Left]),
 		    {Peers, Min_time} = get_info(Tracker ++ "?info_hash=" 
 						 ++ Info ++ "&peer_id=" 
 						 ++ My_id ++ "&port=" 
 						 ++ Port 
-						 ++ "&uploaded=0&downloaded=" 
+						 ++ "&uploaded=" 
+						 ++ integer_to_list(Uploaded)
+						 ++ "&downloaded=" 
 						 ++ integer_to_list(We_have) 
 						 ++ "&left=" 
 						 ++ integer_to_list(Left) 
@@ -95,10 +97,9 @@ loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid,
 %%--------------------------------------------------------------------
 	
 get_current_pieces(File_storage_pid) ->
-    How_much = mutex:request(File_storage_pid, how_much, []),
+    {How_much, Uploaded} = mutex:request(File_storage_pid, how_much, []),
     mutex:received(File_storage_pid),
-    How_much.
-
+    {How_much, Uploaded}.
 %%--------------------------------------------------------------------
 %% Function: get_info/1
 %% Purpose: 

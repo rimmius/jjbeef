@@ -354,7 +354,10 @@ handle_info({'EXIT', Pid, _Reason}, StateName, State) ->
 	    {ok, New_uploader_pid} = piece_uploader:start_link(self(), State#state.file_storage, State#state.msg_handler),
 	    link(New_uploader_pid),
 	    Timeout = get_time_out(StateName),
-	    {next_state, StateName, State#state{uploader = New_uploader_pid}, Timeout}
+	    {next_state, StateName, State#state{uploader = New_uploader_pid}, Timeout};
+	_  ->
+	    piece_uploader:send_event(Uploader_pid, stop, []),
+	    {stop, normal, State}
     end.
 
 %%--------------------------------------------------------------------

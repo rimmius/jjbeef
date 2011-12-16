@@ -29,14 +29,15 @@ do_send(Socket, Type, Msg) ->
 	    gen_tcp:send(Socket, <<0,0,0,0>>);
 	{choke, _} ->
 	    gen_tcp:send(Socket, <<0,0,0,1,0>>);
+	   %%  piece_uploader:send_event(Grandparent, is_choked, true);
 	{unchoke, _} ->
 	    gen_tcp:send(Socket, <<0,0,0,1,1>>);
+	   %%  piece_uploader:send_event(Grandparent, is_choked, false);
 	{am_interested, true} ->
 	    gen_tcp:send(Socket, <<0,0,0,1,2>>);
 	{am_interested, false} ->
 	    gen_tcp:send(Socket, <<0,0,0,1,3>>);
 	{have, Piece_index} ->
-	    %%io:format("~n<====~w====> have sent index=~w~n", [self(), Piece_index]),
 	    gen_tcp:send(Socket, 
 			      <<0,0,0,5,4, Piece_index:32/integer-big>>);
 	{bitfield, Bitfield_in_list} ->
@@ -48,7 +49,6 @@ do_send(Socket, Type, Msg) ->
 				Begin:32/integer-big,
 				Length:32/integer-big>>);
 	{piece, [Index, Begin, Block]} ->
-	    io:format("~n<====~w====> piece sent index=~w, begin=~w~n", [self(), Index, Begin]),
 	    gen_tcp:send(Socket, handle_piece(Index, Begin, Block));
 	{cancel, [Index, Begin, Length]} ->
 	    gen_tcp:send(Socket, 

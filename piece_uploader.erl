@@ -43,7 +43,9 @@ send_event(Pid, is_interested, Arg) ->
 send_event(Pid, request, [Index, Begin, Length]) ->
     gen_fsm:send_event(Pid, {request, {Index, Begin, Length}});
 send_event(Pid, cancel, [Index, Begin, Length]) ->
-    gen_fsm:send_event(Pid, {cancel, {Index, Begin, Length}}).
+    gen_fsm:send_event(Pid, {cancel, {Index, Begin, Length}});
+send_event(Pid, stop, []) ->
+    gen_fsm:send_all_state_event(Pid, stop).
 
 %%send_event(Pid, is_choked, Arg) ->
 %%    gen_fsm:send_all_state_event(Pid, {is_choked, Arg}).
@@ -66,6 +68,7 @@ send_event(Pid, cancel, [Index, Begin, Length]) ->
 %% @end
 %%--------------------------------------------------------------------
 init([Piece_requester_pid, File_storage_pid, Msg_handler_pid]) ->
+    process_flag(trap_exit, true),
     My_bitfield_in_list = mutex:request(File_storage_pid, get_bitfield, []),
     %%My_bitfield_in_list = fake(227),
     mutex:received(File_storage_pid),
@@ -194,8 +197,8 @@ state_name(_Event, _From, State) ->
 %%                   {stop, Reason, NewState}
 %% @end
 %%--------------------------------------------------------------------
-handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
+handle_event(stop, StateName, State) ->
+    {stop, normal, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -231,7 +234,9 @@ handle_sync_event(_Event, _From, StateName, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_info({'EXIT', _Pid, _Reason}, _StateName, State) ->
-    {stop, normal, State}.
+    {stop, normal, State};
+handle_info(_,_,_State) ->
+    {stop, normal, _State}.
 
 %%--------------------------------------------------------------------
 %% @private
