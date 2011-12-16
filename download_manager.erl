@@ -117,7 +117,6 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 	    GUI_pid ! {tracker, Tracker},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
 	{'EXIT', Peers_pid, Reason} ->
-	    io:format("Peerspid crashed!~w~n", [Reason]),
 	    exit(self(), kill);
 	stop -> ok
     after 3000 ->
@@ -177,7 +176,6 @@ get_announce_list({dict, Dict}) ->
 	     List;
 	 error ->
 	     {ok, Link} = dict:find(<<"announce">>, Dict),
-	     io:format("~w~n", [Link]),
 	     [{ok, binary_to_list(Link)}]
      end.
 
@@ -270,7 +268,6 @@ get_names([]) ->
     [];
 get_names([{_, H}|T]) ->
     {ok, {list, [Value]}} = dict:find(<<"path">>, H),
-    io:format("~n~w~n", [Value]),
     [binary_to_list(Value)|get_names(T)].
 
 %%--------------------------------------------------------------------
