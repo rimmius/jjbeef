@@ -686,14 +686,14 @@ check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length,
     end;
 check_piece(_Acc, The_pid, Index, _Table_id,  Chunk_table_id, _Piece_length, 
 	    Dl_storage_pid, Blocks, Piece_storage_pid, _Length, _Full_length) ->
-    io:format("~nPIECE RECEIVED~n")
+    io:format("~nPIECE RECEIVED~n"),
     Hash = sha:sha1raw(Blocks),
     case mutex:request(Dl_storage_pid, compare_hash, [The_pid, Index, Hash]) of
 	true ->
 	    mutex:received(Dl_storage_pid),
 	    io:format("~nPIECE GOOD~n"),
 	    {true, Blocks};
-	What  ->
+	_What  ->
 	    mutex:received(Dl_storage_pid),
 	    ets:delete_all_objects(Chunk_table_id),
 	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, 
