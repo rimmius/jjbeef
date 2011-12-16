@@ -64,7 +64,9 @@ recv_handshake(Socket, My_info_hash) ->
 			false ->
 			    gen_tcp:close(Socket),
 			    {error, false_info_hash}
-		    end
+		    end;
+		{error, Reason} ->
+		    {error, Reason}
 	    end;
 	{ok, _Data} ->	
 	    {error, unknown_data};
