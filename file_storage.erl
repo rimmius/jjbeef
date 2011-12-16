@@ -97,7 +97,7 @@ check_dets(_Dets, _Acc, _Length, _Table, _Full_length, _Piece_length) ->
 get_blocks(<<P:(8*16384)>>, Begin) ->
     [{<<P:(8*16384)>>, Begin}];
 get_blocks(<<P:(8*16384), Rest/bitstring>>, Begin) ->
-    [{<<P:(8*16384)>>, Index} | get_blocks(Rest, Begin+16384)];
+    [{<<P:(8*16384)>>, Begin} | get_blocks(Rest, Begin+16384)];
 get_blocks(Other, Begin) ->
     [{Other, Begin}].
 
@@ -689,7 +689,7 @@ check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length,
 			list_to_binary([Blocks, <<Block:Length_of_block>>]), 
 			Piece_storage_pid, Length, Full_length)
     end;
-check_piece(_Acc, The_pid, Index, Table_id,  Chunk_table_id, _Piece_length, 
+check_piece(_Acc, The_pid, Index, _Table_id,  Chunk_table_id, _Piece_length, 
 	    Dl_storage_pid, Blocks, Piece_storage_pid, _Length, _Full_length) ->
     Hash = sha:sha1raw(Blocks),
     case mutex:request(Dl_storage_pid, compare_hash, [The_pid, Index, Hash]) of
