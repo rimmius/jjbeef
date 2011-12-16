@@ -49,9 +49,8 @@ init(File, GUIPid) ->
     Info_raw = dict:fetch(<<"info">>, Dict),
     Info_bencoded =  bencode:encode(Info_raw),
     Nr_of_pieces = length(get_pieces({dict, Dict})),
-    {Length, _, _, _} = get_length_and_name({dict, Dict}),
     Info_hash = list_to_binary(sha:sha1raw(Info_bencoded)),
-    GUIPid ! {hash, {sha:sha1hash(Info_hash),Nr_of_pieces, Length}},
+    GUIPid ! {hash, {sha:sha1hash(Info_hash),Nr_of_pieces}},
     Peers_pid = peers:start(self(), get_announce_list({dict, Dict}), 
 			    get_pieces({dict, Dict}), 
 			    get_piece_length({dict, Dict}), 
@@ -127,7 +126,6 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 		{reply, {Downloaded, Current_pieces}} ->
 		    case Downloaded of
 			100 ->
-			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
 			    case Counter of
 				0 ->
 				    GUI_pid ! {percentage, {Downloaded, 
@@ -138,7 +136,6 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 				    ok
 			    end;
 			_ ->
-			    io:format("~n~nPERCENTAGE=~w%~n", [Downloaded]),
 			    GUI_pid ! {percentage, {Downloaded, Current_pieces}}
 		    end
 	    end,

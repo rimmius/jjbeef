@@ -103,7 +103,6 @@ start_send([H|T], Peers_pid, Dl_pid, Length, File_storage_pid) ->
 %%--------------------------------------------------------------------
 
 send_to_tracker([],  Peers_pid, _Dl_pid, _Length, _File_storage_pid) ->
-    io:format("KILLING PEERS"),
     exit(Peers_pid, kill);
 send_to_tracker([H|T],  Peers_pid, Dl_pid, Length, File_storage_pid) ->
     Tracker_pid = connect_to_tracker:start(Dl_pid, Peers_pid, Length, 
@@ -114,10 +113,10 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length, File_storage_pid) ->
 	{ok, Peers} ->
 	    insert_new_peers(Peers, Peers_pid, Dl_pid);
 	{'EXIT', Tracker_pid, _Reason} ->
-	    io:format("connecting to next tracker in list from exit ~n"),
+	    io:format("~nCONNECTING TO NEXT TRACKER IN LIST~n"),
 	    send_to_tracker(T, Peers_pid, Dl_pid, Length, File_storage_pid)
     after 10000 ->
-	    io:format("connecting to next tracker in list ~n"),
+	    io:format("~nCONNECTING TO NEXT TRACKER IN LIST~n"),
 	    send_to_tracker(T, Peers_pid, Dl_pid, Length, File_storage_pid)
     end.
 
@@ -199,18 +198,12 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid,
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid,
 		 Dl_storage_pid, Children, Length);
 	{'EXIT', Peer_storage_pid, Reason} -> 
-	    io:format("exit peer_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without peer_storage"),
 	    loop(Dl_pid, peer_storage_crash, File_storage_pid, 
 		 Piece_storage_pid, Dl_storage_pid, Children, Length);		
 	{'EXIT', Piece_storage_pid, Reason} ->
-	    io:format("exit piece_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without piece_storage"),
 	    loop(Dl_pid, Peer_storage_pid, File_storage_pid, 
 		 piece_storage_crash, Dl_storage_pid, Children, Length);
 	{'EXIT', File_storage_pid, Reason} ->
-	    io:format("exit file_storage with reason: ~w~n", [Reason]),
-	    io:format("looping without file_storage"),
 	    loop(Dl_pid, Peer_storage_pid, file_storage_crash, 
 		 Piece_storage_pid, Dl_storage_pid, Children, Length);
 	{'EXIT', Child, _} ->

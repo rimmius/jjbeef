@@ -51,8 +51,7 @@ init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list,
     New_bitfield = check_dets(Dets_table, 0, length(List_of_pieces)-1,
 			      Table_id, full_length(Length_in_list), 
 			      Piece_length),
-   
-    io:format("~w~n", [New_bitfield]),
+    io:format("~nGENERATING NEW BITFIELD~n"),
     dets:close(Dets_table),
     loop(Dl_storage_pid, Files, New_bitfield, Table_id, length(List_of_pieces), 
 	 Piece_length, Length_in_list, Piece_storage_pid, Dets_name, New_path,
@@ -79,7 +78,6 @@ check_dets(Dets_name, Acc, Length, Table_id, Full_length, Piece_length)
 	    [{0, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, 
 				 Full_length, Piece_length)];
 	[{Acc, _Blocks}] ->
-	    %% List = get_blocks(list_to_binary(Blocks), 0),
 	    ets:insert(Table_id, {Acc, 1}),
 	    [{1, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, 
 				 Full_length, Piece_length)]
@@ -179,6 +177,7 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 			    dets:close(Dets_name),
 			    ets:delete_all_objects(Chunk_table_id),
 			    ets:insert(Table_id, {Index, 1}),
+			    io:format("~nGENERATING NEW BITFIELD~n"),
 			    New_bitfield = generate_bitfield(0, Length,
 							     Table_id, 
 							     Piece_length, 
@@ -220,8 +219,6 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 				_ ->
 				    ok
 			    end,
-			    io:format("~nLength=~wBITFIELD~w~n",[Length, 
-								 New_bitfield]),
 			    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id,
 				 Length,
 				 Piece_length, Length_in_list, 
@@ -424,7 +421,6 @@ write_to_files(Io, Dets_name, Cur_index, Acc, [_File_name|Rest], Length,
     ok = file:close(Io),
     case Rest of
 	[] ->
-	    %% io:format("~n~n~nDONE!!!!"),
 	    ok;
 	_List ->
 	    {ok, New_io} = file:open(Path ++ hd(Rest), [write]),
@@ -459,7 +455,7 @@ get_amount_of_pieces(_Acc, _Length, _Bitfield) ->
 
 %%--------------------------------------------------------------------
 %% Function:generate_bitfield/7
-%% Purpose: Generating a current bitfield
+%% Purpose: Generating a new bitfield
 %% Args: Acc: The current index
 %% Length: The total amount of pieces
 %% Table_id: The piece - table
@@ -594,7 +590,6 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
 	[] ->
 	    case Index =:= Last_piece of
 		true ->
-		    io:format("~nREQUESTING ON LAST PIECE~n~n"),
 		    Last_piece_length = Full_length rem Piece_length,
 		    Last_chunk = Last_piece_length rem 16384,
 		    Last_chunk_req = Last_piece_length - Last_chunk,
@@ -691,13 +686,14 @@ check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length,
     end;
 check_piece(_Acc, The_pid, Index, _Table_id,  Chunk_table_id, _Piece_length, 
 	    Dl_storage_pid, Blocks, Piece_storage_pid, _Length, _Full_length) ->
+    io:format("~nPIECE RECEIVED~n")
     Hash = sha:sha1raw(Blocks),
     case mutex:request(Dl_storage_pid, compare_hash, [The_pid, Index, Hash]) of
 	true ->
 	    mutex:received(Dl_storage_pid),
+	    io:format("~nPIECE GOOD~n"),
 	    {true, Blocks};
 	What  ->
-	    io:format("~n~nWHAT=~w~n~n", [What]),
 	    mutex:received(Dl_storage_pid),
 	    ets:delete_all_objects(Chunk_table_id),
 	    {Index,{_Hash_correct,Peers}} = mutex:request(Dl_storage_pid, 
@@ -707,6 +703,6 @@ check_piece(_Acc, The_pid, Index, _Table_id,  Chunk_table_id, _Piece_length,
 	    mutex:request(Piece_storage_pid, put_piece_back, [Index, Hash, 
 							      Peers]),
 	    mutex:received(Piece_storage_pid),
-	    io:format("~n~nPIECE IS FAAAAAAAALSE~n~n"),
+	    io:format("~nPIECE IS CORRUPT~n"),
 	    error
     end.
