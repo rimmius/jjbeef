@@ -1,21 +1,26 @@
 %%%---------------------------------------------------------------------
-%%% source:  https://github.com/logaan/erlang-bittorrent/blob/fdfe4b87d
-%%%          596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
-%%% Modified by: Fredrik Gustafsson
+%%% Copied and the modified from: 
+%%% https://github.com/logaan/erlang-bittorrent/blob
+%%% /fdfe4b87d596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
 %%% Creation date: 2011-10-07
 %%%--------------------------------------------------------------------- 
 %%% Description module bencode
 %%%--------------------------------------------------------------------- 
-%%% Decoding and encoding bencoded information
+%%% This module decodes and encodes information read from the *.torrent
+%%% file that is bencoded. 
 %%%--------------------------------------------------------------------- 
 %%% Exports 
 %%%--------------------------------------------------------------------- 
-%%% decode(Data)
-%%%     bencode decoding function
+%%% decode(Binary)
+%%%   decodes the binary information returned from reading the *.torrent
+%%%   file
+%%%   returns a tagged tuple {dict, Dict} with Dict being the dictonary
+%%%   in the *.torrent file.
 %%%--------------------------------------------------------------------- 
-%%% encode(Data)
-%%%     bencode encoding function
-%%%---------------------------------------------------------------------
+%%% encode(Element)
+%%%   encodes to bencode as binary
+%%%   returnes bencoded information as binaries
+%%%---------------------------------------------------------------------  
 
 -module(bencode).
 -export([decode/1, encode/1]).
