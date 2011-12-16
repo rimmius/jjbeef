@@ -2,13 +2,30 @@
 %%% @author  <Bruce@THINKPAD>
 %%% @copyright (C) 2011, 
 %%% @doc
-%%%
+%%% This module takes a socket and send/receive handshake from it.
+%%% The functions are called outside by other modules
+%%% 
 %%% @end
 %%% Created : 18 Oct 2011 by  <Bruce@THINKPAD>
 %%%-------------------------------------------------------------------
 -module(handshake_handler).
+
+%% API
 -export([send_handshake/3, recv_handshake/2]).
 
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% connects to a IP/Port, and send a handshake. If a socket is provided
+%% rather than the ip/port, send a handshake directly
+%%
+%% @spec send_handshake(Option, My_info_hash, My_peer_id) -> 
+%%                                   {ok, Socket} | {error, Reason}
+%% @end
+%%--------------------------------------------------------------------
 send_handshake({ip, Host, Port}, My_info_hash, My_peer_id) ->    
     case gen_tcp:connect(Host, Port, [binary, {active, false},
 				      {packet, 0}], 1000) of
@@ -28,6 +45,14 @@ send_handshake({socket, Socket}, My_info_hash, My_peer_id) ->
 	    {error, Reason}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% receives a handshake from the socket
+%%
+%% @spec recv_handshake(Socket, My_info_hash) -> 
+%%                 {ok, {Socket, Peer_id}} | {error, false_info_hash}
+%% @end
+%%--------------------------------------------------------------------
 recv_handshake(Socket, My_info_hash) ->
     case gen_tcp:recv(Socket, 20) of
 	{ok, <<19, "BitTorrent protocol">>} ->
