@@ -66,7 +66,7 @@ recv_handshake(Socket, My_info_hash) ->
 			    {error, false_info_hash}
 		    end
 	    end;
-	{ok, Data} ->	
+	{ok, _Data} ->	
 	    {error, unknown_data};
 	{error, Reason} ->
 	    {error, Reason}
