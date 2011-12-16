@@ -3,7 +3,7 @@
 %%% Creation date: 2011-10-19
 %%% Refactored date: 2011-11-03
 %%%--------------------------------------------------------------------- 
-%%% Description module downloading_manager
+%%% Description module gui_basic
 %%%--------------------------------------------------------------------- 
 %%% This Module is the main controller module for the GUI. 
 %%%--------------------------------------------------------------------- 
