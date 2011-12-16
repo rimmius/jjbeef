@@ -17,7 +17,7 @@ init(File, GUIPid) ->
     Info_raw = dict:fetch(<<"info">>, Dict),
     Info_bencoded =  bencode:encode(Info_raw),
     Nr_of_pieces = length(get_pieces({dict, Dict})),
-    {Length,_,_,_} = get_length_and_name({dict, Dict}),
+    {Length, _, _, _} = get_length_and_name({dict, Dict}),
     Info_hash = list_to_binary(sha:sha1raw(Info_bencoded)),
     GUIPid ! {hash, {sha:sha1hash(Info_hash),Nr_of_pieces, Length}},
     Peers_pid = peers:start(self(), get_announce_list({dict, Dict}), 
