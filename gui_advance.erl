@@ -98,7 +98,6 @@ torrent_info_page(Notebook) ->
     Tpage = wxPanel:new(Notebook, []),
 
     TorNameText1201 = wxStaticText:new(Tpage, 1201, "Torrent Name: ", []),
-    SeedText1202 = wxStaticText:new(Tpage, 1202, "Seeders: ", []),
   
     TpText1204 = wxStaticText:new(Tpage, 1204, "Total Pieces:", []), 
     CpText1205 = wxStaticText:new(Tpage, 1205, 
@@ -111,8 +110,7 @@ torrent_info_page(Notebook) ->
     wxSizer:add(TorrentGridSizer, TorNameText1201, 
 			    [{proportion, 0}, {flag, ?wxALIGN_LEFT}]),
     wxSizer:add(TorrentGridSizer, 30, 10, []),
-    wxSizer:add(TorrentGridSizer, SeedText1202, [{proportion, 0}, 
-						 {flag, ?wxALIGN_LEFT}]),
+    wxSizer:add(TorrentGridSizer, 30, 10, []),
     wxSizer:add(TorrentGridSizer, 30,10, [{proportion, 0}, 
 						  {flag, ?wxALIGN_RIGHT}]), 
     wxSizer:add(TorrentGridSizer, TpText1204, [{proportion, 0}, 

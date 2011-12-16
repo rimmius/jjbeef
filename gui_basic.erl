@@ -236,11 +236,11 @@ loop(State, Download_pid) ->
    	#wx{event=#wxClose{}} ->
    	    io:format("~p Closing window ~n",[self()]),
    	    ok = wxFrame:setStatusText(Frame, "Closing...",[]),
+	    Download_pid ! stop,
 	    wxWindow:destroy(State), 
 	    ok;
         %%Handles the opening of Torrent File.
 	#wx{id= ?wxID_OPEN, event=#wxCommand{type=command_menu_selected}} ->
-	    io:format("The Open button works!~n"),
 	    
 	    FC = wxFileDialog:new(Frame, [{style, ?wxFD_OPEN}]),
 	    case wxDialog:showModal(FC) of  
@@ -250,7 +250,6 @@ loop(State, Download_pid) ->
 		    
 		    case string:str(Fname2, ".torrent") of
 			0  ->
-			    io:format("Wrong File has been chosen! ~n"),
 			    Error1 =  wxMessageDialog:new(Frame, 
 						     "Invalid File Selection", 
 							  [{caption, 
@@ -299,7 +298,6 @@ loop(State, Download_pid) ->
 
 	#wx{id= ?ADVANCE_FUNCTIONS_START, 
 	    event=#wxCommand{type=command_menu_selected}} ->
-	    io:format("Advance functions button works! \n"),
 	    
 	    
 	    wxToolBar:removeTool(ToolBar, ?ADVANCE_FUNCTIONS_START), 
@@ -307,8 +305,7 @@ loop(State, Download_pid) ->
 				 "Advance", Advance_End, [{shortHelp, 
 							   "Advance"}, 
 							  {longHelp, 
-						 "Activate Advance Function"}]),
-	    io:format("toggle set to : true\n"),   
+						 "Activate Advance Function"}]),  
 	    wxToolBar:realize(ToolBar),
             wxTopLevelWindow:setSize(Frame, 600, 190), 
 	    loop(State, Download_pid);	    
@@ -322,8 +319,7 @@ loop(State, Download_pid) ->
 							     "Advance"}, 
 							    {longHelp, 
 						 "Activate Advance Function"}]),
-	    
-	    io:format("toggle set to : false\n"),       
+	          
 	    wxToolBar:realize(ToolBar),
 	    wxTopLevelWindow:setSize(Frame, 600, 500),
 	    loop(State, Download_pid);
@@ -342,11 +338,11 @@ loop(State, Download_pid) ->
 		wxWindow:refresh(Frame),
 		loop(State, Download_pid);
 	
-	     {percentage, Percent, Dl_pieces} ->
+	{percentage, {Percent, Dl_pieces}} ->
 	    wxGauge:setValue(NormalGauge, Percent),
-	    PText1 =  lists:concat([Percent]),
+	    PText1 =  integer_to_list(Percent),
 	    PText2 =   "% Complete",
-            StText = PText1 ++ PText2,
+            StText = lists:concat([PText1, PText2]),
 	    wxStaticText:setLabel(CalcText, StText),
 	    wxStatusBar:setStatusText(StatusBar, StText, [{number, 3}]),
 	    Pieces_left_string = "Pieces Left: " ++ integer_to_list(Dl_pieces),
@@ -378,8 +374,7 @@ loop(State, Download_pid) ->
 					  [{caption, "Connection timed out"}, 
 					   {style, ?wxYES_NO}]),        
 	    case wxMessageDialog:showModal(Error2) of
-		?wxID_YES ->
-		    io:format("The Yes Button works! ~n"),            
+		?wxID_YES ->           
 		    loop(State, Download_pid);	  
 		?wxID_NO ->
 		    wxToolBar:enableTool(ToolBar, ?wxID_OPEN, true),
@@ -391,7 +386,6 @@ loop(State, Download_pid) ->
 
 	%%Handles the x button click.
 	#wx{id = 101, event=#wxCommand{type = command_button_clicked}} ->
-	    io:format("Torrent download deleted ~n"),
 	    wxGauge:setValue(NormalGauge, 0),
 	    wxToolBar:enableTool(ToolBar, ?wxID_OPEN, true),
 	    wxStaticText:setLabel(CalcText, " "),
@@ -411,7 +405,6 @@ loop(State, Download_pid) ->
 
          %%Handles the Help Event.	
 	#wx{id= ?wxID_HELP, event=#wxCommand{type=command_menu_selected}} ->
-	    io:format("The HELP icon works!"),
 	    wx_misc:launchDefaultBrowser("http://jjbeef.yolasite.com/"),
 	    loop(State, Download_pid);
 	
@@ -420,8 +413,7 @@ loop(State, Download_pid) ->
 	    gui_info:start(Frame),
 	    loop(State, Download_pid);	
 	
-	Msg ->
-	    io:format("Got ~p ~n", [Msg]),
+	_Msg ->
 	    State,
             loop(State, Download_pid)
 		
