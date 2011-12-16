@@ -52,7 +52,8 @@ chunk_it_up([H|T]) ->
 	48 ->
 	    ["%" ++ List1|chunk_it_up(List2)];
 	_ ->
-	    [check_digits(http_util:hexlist_to_integer(List1))|chunk_it_up(List2)]
+	    [check_digits(http_util:hexlist_to_integer(List1))|
+	     chunk_it_up(List2)]
     end.
 
 %% inner function for url encoding
