@@ -19,7 +19,7 @@ init(File, GUIPid) ->
     Nr_of_pieces = length(get_pieces({dict, Dict})),
     {Length,_,_,_} = get_length_and_name({dict, Dict}),
     Info_hash = list_to_binary(sha:sha1raw(Info_bencoded)),
-    GUIPid ! {hash, {sha:sha1hash(Info_hash),Nr_of_pieces, (Length/1000000)}},
+    GUIPid ! {hash, {sha:sha1hash(Info_hash),Nr_of_pieces, Length}},
     Peers_pid = peers:start(self(), get_announce_list({dict, Dict}), 
 			    get_pieces({dict, Dict}), 
 			    get_piece_length({dict, Dict}), 
