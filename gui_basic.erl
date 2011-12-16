@@ -57,8 +57,8 @@ check_length(Id) ->
 %% Purpose: This creates the window frame
 %% Args: no args
 %% Returns: Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
-     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
-     CompleteText1105, But101, StaticBitmap_Dl, HashText1106
+%%     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
+%%     CompleteText1105, But101, StaticBitmap_Dl, HashText1106
 %%--------------------------------------------------------------------
 
 create_window() ->
@@ -221,8 +221,9 @@ create_window() ->
 %% Purpose: This is the main loop for th GUI, which handles all events within
 %% the GUI and recieved from the backend processes of the application. 
 %% Args:  {Frame, StatusBar, ToolBar, Text, NormalGauge, CalcText, TimeText, 
-     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
- CompleteText1105, But101, StaticBitmap_Dl,  HashText110}, Download_pid, States
+%%     TrackText, Advance_Start, Advance_End, TorNameText1201, CreateText1104, 
+%% CompleteText1105, But101, StaticBitmap_Dl,  HashText110}, Download_pid,
+%% States
 %% Returns:loop(State, Download_Pid)
 %%--------------------------------------------------------------------
 
