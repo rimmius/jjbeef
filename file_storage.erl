@@ -1,5 +1,24 @@
+%%%---------------------------------------------------------------------
 %%% Created by: Fredrik Gustafsson
-%%% Date: 16-11-2011
+%%% Creation date: 2011-11-16
+%%%--------------------------------------------------------------------- 
+%%% Description module file_storage
+%%%--------------------------------------------------------------------- 
+%%% What this module does...
+%%%--------------------------------------------------------------------- 
+%%% Exports 
+%%%--------------------------------------------------------------------- 
+%%% start(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, 
+%%%       Piece_storage_pid, Dets_name, Path)
+%%%     Start the file storage process
+%%%--------------------------------------------------------------------- 
+%%% init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list, 
+%%%      Piece_storage_pid, Dets_name, Path)
+%%%   
+%%%---------------------------------------------------------------------
+%%% full_length(List)
+%%%      
+%%%---------------------------------------------------------------------
 
 -module(file_storage).
 -export([start/8, init/8, full_length/1]).
@@ -25,28 +44,48 @@ init(Dl_storage_pid, Files, List_of_pieces, Piece_length, Length_in_list,
 	    end
     end,
     Table_id = ets:new(torrent, [ordered_set]),
-    {ok, Dets_table} = dets:open_file(Dets_name, [{file, Dets_name}, {type, set}]),
-    New_bitfield = check_dets(Dets_table, 0, length(List_of_pieces)-1, Table_id, full_length(Length_in_list), Piece_length),
-    %% New_bitfield = generate_bitfield(0, length(List_of_pieces), Table_id, 
-    %% 						     Piece_length, 
-    %% 						     Dl_storage_pid, 
-    %% 						     Piece_storage_pid, full_length(Length_in_list)),
+    {ok, Dets_table} = dets:open_file(Dets_name, [{file, Dets_name},
+						  {type, set}]),
+    New_bitfield = check_dets(Dets_table, 0, length(List_of_pieces)-1,
+			      Table_id, full_length(Length_in_list), 
+			      Piece_length),
+   
     io:format("~w~n", [New_bitfield]),
     dets:close(Dets_table),
     %% Data = initiate_data(0, length(List_of_pieces)),
     loop(Dl_storage_pid, Files, New_bitfield, Table_id, length(List_of_pieces), 
-	 Piece_length, Length_in_list, Piece_storage_pid, Dets_name, New_path, 0).
-check_dets(Dets_name, Acc, Length, Table_id, Full_length, Piece_length) when Acc =< Length ->
+	 Piece_length, Length_in_list, Piece_storage_pid, Dets_name, New_path,
+	 0).
+
+
+%%--------------------------------------------------------------------
+%% Function:check_dets/6
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
+
+check_dets(Dets_name, Acc, Length, Table_id, Full_length, Piece_length)
+ when Acc =< Length ->
     case dets:lookup(Dets_name, Acc) of
 	[] ->
-	    [{0, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, Full_length, Piece_length)];
+	    [{0, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, 
+				 Full_length, Piece_length)];
 	[{Acc, _Blocks}] ->
 	    %% List = get_blocks(list_to_binary(Blocks), 0),
 	    ets:insert(Table_id, {Acc, 1}),
-	    [{1, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, Full_length, Piece_length)]
+	    [{1, Acc}|check_dets(Dets_name, Acc+1, Length, Table_id, 
+				 Full_length, Piece_length)]
     end;
 check_dets(_Dets, _Acc, _Length, _Table, _Full_length, _Piece_length) ->
     [].
+
+%%--------------------------------------------------------------------
+%% Function:get_blocks/2
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 get_blocks(<<P:(8*16384)>>, Index) ->
     [{<<P:(8*16384)>>, Index}];
 get_blocks(<<P:(8*16384), Rest/bitstring>>, Index) ->
@@ -54,15 +93,12 @@ get_blocks(<<P:(8*16384), Rest/bitstring>>, Index) ->
 get_blocks(Other, Index) ->
     [{Other, Index}].
 
-%% count_bin(<<>>, Count) ->
-%%     Count;
-%% count_bin(<<_First:8, Rest/binary>>, Count) ->
-%%     count_bin(Rest, Count+1).
-
-%% initiate_data(Nr, Length) when Nr =< Length ->
-%%     [{0, Nr}|initiate_data(Nr+1, Length)];
-%% initiate_data(_Nr, _Length) ->
-%%     [].
+%%--------------------------------------------------------------------
+%% Function:loop/11
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length, 
      Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded) ->
     receive
@@ -76,16 +112,20 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 		    From ! {reply, {Reply, Uploaded}}
 	    end,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, 
+		 New_path, Uploaded);
 	{request, c_downloaded_pieces, [], From} ->
-	    From ! {reply, (Length - get_amount_of_pieces(0, Length, Bitfield))},
+	    From ! {reply, (Length - get_amount_of_pieces(0, Length, 
+							  Bitfield))},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, 
+		 New_path, Uploaded);
 	{request, get_bitfield, [], From} ->
 	    Reply = strip_bitfield(Bitfield, 0, Length),
 	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, 
+		 New_path, Uploaded);
 	{request, insert_chunk, [The_pid, Index, Begin, Block, Block_length], 
 	 From} ->
 	    case ets:lookup(Table_id, Index) of
@@ -98,69 +138,99 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 			1 ->
 			    From ! {reply, true};
 			_ ->
-			    ets:insert(Chunk_table_id, {Begin, Block, Block_length})
+			    ets:insert(Chunk_table_id, {Begin, Block, 
+							Block_length})
 		    end
 	    end,
 	    case Chunk_table_id /= 1 of
 		true ->
 		    case check_piece(0, The_pid, Index, Table_id, 
 				     Chunk_table_id, Piece_length, 
-				     Dl_storage_pid, <<>>, Piece_storage_pid, Length-1, full_length(Length_in_list)) of
+				     Dl_storage_pid, <<>>, Piece_storage_pid,
+				     Length-1, full_length(Length_in_list)) of
 			false ->
 			    From ! {reply, false};
 			error ->
 			    From ! {reply, error};
 			{true, Blocks} ->
 			    From ! {reply, true},
-			    {ok, Dets_name} = dets:open_file(Dets_table, [{file, Dets_table}, {type, set}]),
+			    {ok, Dets_name} = dets:open_file(Dets_table, 
+							     [{file,
+							       Dets_table},
+							      {type, set}]),
 			    dets:insert(Dets_name, {Index, Blocks}),
 			    dets:close(Dets_name),
 			    ets:delete_all_objects(Chunk_table_id),
 			    ets:insert(Table_id, {Index, 1}),
-			    New_bitfield = generate_bitfield(0, Length, Table_id, 
+			    New_bitfield = generate_bitfield(0, Length,
+							     Table_id, 
 							     Piece_length, 
 							     Dl_storage_pid, 
-							     Piece_storage_pid, full_length(Length_in_list)),
+							     Piece_storage_pid,
+							     full_length(
+							       Length_in_list)),
 			    case is_finished(New_bitfield, 0, Length-1) of
 				true ->
 				    case length([H|T]) =:= 1 of
 					true ->
-					    {ok, Dets_name_} = dets:open_file(Dets_table, [{file, Dets_table}, {type, set}]),
-					    {ok , Io} = file:open(New_path ++ H, [write]),
-					    ok =  write_to_file(Dets_name_, 0, Length, Io, 
+					    {ok, Dets_name_} = 
+						dets:open_file(Dets_table,
+							       [{file,
+								 Dets_table},
+								{type, set}]),
+					    {ok , Io} = file:open(New_path ++ H,
+								  [write]),
+					    ok =  write_to_file(Dets_name_, 0,
+								Length, Io, 
 								Piece_length),
 					    ok = file:close(Io),
 					    dets:close(Dets_name_);
 					_ ->
-					    {ok, Dets_name_} = dets:open_file(Dets_table, [{file, Dets_table}, {type, set}]),
-					    {ok, Io} = file:open(New_path ++ H, [write]),
-					    write_to_files(Io,Dets_name_, 0,0, [H|T], Length, 
-							   Length_in_list, Piece_length, New_path),
+					    {ok, Dets_name_} = 
+						dets:open_file(Dets_table,
+							       [{file,
+								 Dets_table}, 
+								{type, set}]),
+					    {ok, Io} = file:open(New_path ++ H,
+								 [write]),
+					    write_to_files(Io,Dets_name_, 0,0,
+							   [H|T], Length, 
+							   Length_in_list, 
+							   Piece_length, 
+							   New_path),
 					    dets:close(Dets_name_)
 				    end;
 				_ ->
 				    ok
 			    end,
-			    io:format("~nLength=~wBITFIELD~w~n",[Length, New_bitfield]),
-			    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id, Length,
-				 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded)
+			    io:format("~nLength=~wBITFIELD~w~n",[Length, 
+								 New_bitfield]),
+			    loop(Dl_storage_pid, [H|T], New_bitfield, Table_id,
+				 Length,
+				 Piece_length, Length_in_list, 
+				 Piece_storage_pid, Dets_table, 
+				 New_path, Uploaded)
 		    end;
 		_  ->
 		    ok
 	    end,
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid,
+		 Dets_table, New_path, Uploaded);
 	{request, compare_bitfield, [Peer_bitfield], From} ->
 	    From ! {reply, {ok, am_interested(Bitfield, Peer_bitfield, 0, 
 					      length(Bitfield)-1)}},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table,
+		 New_path, Uploaded);
 	{request, have, [Index], From} ->
 	    From ! {reply, have(Index, Bitfield)},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, 
+		 New_path, Uploaded);
 	{request, get_piece, [Index, Begin, Request_length], From} ->
-	    {ok, Dets_name} = dets:open_file(Dets_table, [{file, Dets_table}, {type, set}]),
+	    {ok, Dets_name} = dets:open_file(Dets_table, [{file, Dets_table}, 
+							  {type, set}]),
 	    case Request_length of
 		16384 ->
 		    case dets:lookup(Dets_name, Index) of
@@ -183,14 +253,18 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 				    From ! {reply, {error, false}};
 				[{_Acc, Blocks}] ->
 				    Full_length_ = full_length(Length_in_list),
-				    Last_piece_l = Full_length_ rem Piece_length,
+				    Last_piece_l = Full_length_ 
+					rem Piece_length,
 				    Last_chunk_l = Last_piece_l rem 16384,
-				    case Begin =:= (Last_piece_l - Last_chunk_l) of
+				    case Begin =:= (Last_piece_l
+						    - Last_chunk_l) of
 					true ->
 					    List = get_blocks(Blocks, 0),
-					    case lists:keysearch(Begin, 2, List) of
+					    case lists:keysearch(Begin, 2,
+								 List) of
 						[] ->
-						    From ! {reply, {error, false}};
+						    From ! {reply, {error,
+								    false}};
 						 {value, {Block, Begin}} ->
 						    From ! {reply, {ok, Block}}
 					    end;
@@ -204,19 +278,24 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    end,
 	    dets:close(Dets_name),
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded + Request_length);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table,
+		 New_path, Uploaded + Request_length);
 	{request, check_piece, [List], From} ->
 	    From ! {reply, pieces_to_remove(Table_id, List, Dl_storage_pid, 
-					    Piece_length, Piece_storage_pid, Length, full_length(Length_in_list))},
+					    Piece_length, Piece_storage_pid,
+					    Length, 
+					    full_length(Length_in_list))},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded);
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table,
+		 New_path, Uploaded);
 	{request, what_chunk, [Index], From} ->
 	    case ets:lookup(Table_id, Index) of
 		[] ->
 		    Chunk_table_id = ets:new(piece, [ordered_set]),
 		    ets:insert(Table_id, {Index, Chunk_table_id}),
 		    
-		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length, Length-1, full_length(Length_in_list));
+		    Reply =  what_chunk(0, Index, Chunk_table_id, Piece_length,
+					Length-1, full_length(Length_in_list));
 		[{Index, Something}] ->
 		    case Something of
 			1 ->
@@ -229,9 +308,16 @@ loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, Piece_length,
 	    end,
 	    From ! {reply, Reply},
 	    loop(Dl_storage_pid, [H|T], Bitfield, Table_id, Length, 
-		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, New_path, Uploaded)
+		 Piece_length, Length_in_list, Piece_storage_pid, Dets_table, 
+		 New_path, Uploaded)
     end.
 
+%%--------------------------------------------------------------------
+%% Function:is_finished/3
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 is_finished(Bitfield, Acc, Max) when Acc =< Max ->
     {value, {Have, _Index}} = lists:keysearch(Acc, 2, Bitfield),
     case Have of
@@ -242,6 +328,13 @@ is_finished(Bitfield, Acc, Max) when Acc =< Max ->
     end;
 is_finished(_Bitfield, _Acc, _Max) ->
     true.
+
+%%--------------------------------------------------------------------
+%% Function:pieces_to_remove/7
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 pieces_to_remove(_Table_id, [], _Dl_storage_pid, _Piece_length, 
 		 _Piece_storage_pid, _Length, _Full_length) ->
     [];
@@ -252,17 +345,21 @@ pieces_to_remove(Table_id, [{Index, {Hash, Peers}}|T], Dl_storage_pid,
 	    [{Index, {Hash, Peers}}|pieces_to_remove(Table_id, T, 
 						     Dl_storage_pid, 
 						     Piece_length, 
-						     Piece_storage_pid, Length, Full_length)];
+						     Piece_storage_pid, Length,
+						     Full_length)];
 	[{Index, Something}] ->
 	    case Something of
 		1 ->
 		   pieces_to_remove(Table_id, T, Dl_storage_pid, 
-				     Piece_length, Piece_storage_pid, Length, Full_length);
+				     Piece_length, Piece_storage_pid, Length,
+				    Full_length);
 		_  ->
 		    [{Index, {Hash, Peers}}|pieces_to_remove(Table_id, T, 
 							     Dl_storage_pid, 
 							     Piece_length, 
-							     Piece_storage_pid, Length, Full_length)]
+							     Piece_storage_pid,
+							     Length,
+							     Full_length)]
 	    end
     end.
 full_length([]) ->
@@ -270,6 +367,12 @@ full_length([]) ->
 full_length([H|T]) ->
     H + full_length(T).
 
+%%--------------------------------------------------------------------
+%% Function:write_to_files/9
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 write_to_files(Io, Dets_name, Cur_index, Acc, [File_name|Rest], Length, 
 	       [Size|Sizes], Piece_length, Path) when Cur_index =< Length, 
 						Acc =< Size ->
@@ -281,7 +384,8 @@ write_to_files(Io, Dets_name, Cur_index, Acc, [File_name|Rest], Length,
 	[{Cur_index, Blocks}] ->
 	    write_out_bits(Io, get_blocks(Blocks,0), 0, Piece_length),
 	    write_to_files(Io, Dets_name, Cur_index+1, Acc+Piece_length, 
-			   [File_name|Rest], Length, [Size|Sizes], Piece_length, Path)
+			   [File_name|Rest], Length, [Size|Sizes], Piece_length
+			   ,Path)
     end;
 write_to_files(Io, Dets_name, Cur_index, Acc, [_File_name|Rest], Length, 
 	       [_Size|Sizes], Piece_length, Path) when Cur_index =< Length ->
@@ -295,32 +399,56 @@ write_to_files(Io, Dets_name, Cur_index, Acc, [_File_name|Rest], Length,
 	    write_to_files(New_io, Dets_name, Cur_index, Acc, Rest, Length, 
 			   Sizes, Piece_length, Path)
     end.
+
+%%--------------------------------------------------------------------
+%% Function:write_out_bits/4
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 write_out_bits(Io, List, Acc, Piece_length) when Acc < Piece_length ->
     {value, {Block, Acc}} = lists:keysearch(Acc, 2, List),
     file:write(Io, Block),
     write_out_bits(Io, List, Acc+(16384*8), Piece_length);
 write_out_bits(_,_,_,_) ->
     ok.
+
+%%--------------------------------------------------------------------
+%% Function:get_amount_of_pieces/3
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 get_amount_of_pieces(Acc, Length, Bitfield) when Acc < Length ->
     {value, {Have, Acc}} = lists:keysearch(Acc, 2, Bitfield),
     Have+get_amount_of_pieces(Acc+1, Length, Bitfield);
 get_amount_of_pieces(_Acc, _Length, _Bitfield) ->
     0.
 
+%%--------------------------------------------------------------------
+%% Function:generate_bitfield/7
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 generate_bitfield(Acc, Length, Table_id, Piece_length, Dl_storage_pid, 
 		  Piece_storage_pid, Full_length) when Acc < Length ->
     case ets:lookup(Table_id, Acc) of
 	[] ->
 	    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, 
-					Dl_storage_pid, Piece_storage_pid, Full_length)];
+					Dl_storage_pid, Piece_storage_pid, 
+					Full_length)];
 	[{_, Something}]  ->
 	    case Something of
 		1 ->
-		    [{1, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, 
-				Dl_storage_pid, Piece_storage_pid, Full_length)];
+		    [{1, Acc}|generate_bitfield(Acc+1, Length, Table_id, 
+						Piece_length, Dl_storage_pid, 
+						Piece_storage_pid, 
+						Full_length)];
 		_ ->
-		    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, Piece_length, 
-				Dl_storage_pid, Piece_storage_pid, Full_length)]
+		    [{0, Acc}|generate_bitfield(Acc+1, Length, Table_id, 
+						Piece_length, Dl_storage_pid, 
+						Piece_storage_pid, Full_length)]
 	    end
     end;
 
@@ -328,12 +456,24 @@ generate_bitfield(_Acc, _Length, _Table_id, _Piece_length, _Dl_storage_pid,
 		  _Piece_storage_pid, _Full_length) ->
     [].
 
+%%--------------------------------------------------------------------
+%% Function:strip_bitfield/3
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 strip_bitfield(Bitfield, Acc, Max) when Acc < Max ->
     {value, {Have, _Index}} = lists:keysearch(Acc, 2, Bitfield),
     [Have|strip_bitfield(Bitfield, Acc+1, Max)];
 strip_bitfield(_Bitfield, _Acc, _Max) ->
     [].
 
+%%--------------------------------------------------------------------
+%% Function:write_to_file/5
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 write_to_file(Dets_name, Acc, Length, Io, Piece_length) when Acc =< Length ->
     case dets:lookup(Dets_name, Acc) of
 	[] ->
@@ -345,6 +485,12 @@ write_to_file(Dets_name, Acc, Length, Io, Piece_length) when Acc =< Length ->
 write_to_file(_Dets_name, _Acc, _Length, _Io, _Piece_length) ->
     ok.
 
+%%--------------------------------------------------------------------
+%% Function:am_interested/4
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
     {value, {Have, Acc}} = lists:keysearch(Acc, 2, Peer_bitfield),
     {value, {Our_have, Acc}} = lists:keysearch(Acc, 2, Our_bitfield),
@@ -362,7 +508,13 @@ am_interested(Our_bitfield, Peer_bitfield, Acc, Max) when Acc =< Max ->
     end;
 am_interested(_Our_bitfield, _Peer_bitfield, _Acc, _Max) ->
     [].
-	
+
+%%--------------------------------------------------------------------
+%% Function:have/2
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------	
 have(Index, Bitfield) ->
     {value, {Have, Index}} = lists:keysearch(Index, 2, Bitfield),
     case Have of
@@ -371,6 +523,13 @@ have(Index, Bitfield) ->
 	1  ->
 	    false
     end.
+
+%%--------------------------------------------------------------------
+%% Function:what_chunk/6
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length) 
   when Acc < Piece_length ->
     case ets:lookup(Chunk_table_id, Acc) of
@@ -394,6 +553,13 @@ what_chunk(Acc, Index, Chunk_table_id, Piece_length, Last_piece, Full_length)
 what_chunk(_Acc, _Index, _Chunk_table_id, _Piece_length, _Last_piece, 
 	   _Full_length) ->
     access_denied.
+
+%%--------------------------------------------------------------------
+%% Function:last_piece_req
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 last_piece_req(Acc, Chunk_table_id,  Index, Last_piece_length, Last_chunk, 
 	       Last_chunk_req) when Acc < Last_piece_length  ->
     case ets:lookup(Chunk_table_id, Acc) of
@@ -412,6 +578,12 @@ last_piece_req(_Acc, _Chunk_Table_id, _Index, _Last_piece_length,
 	       _Last_chunk, _Last_chunk_req) ->
     access_denied.
 
+%%--------------------------------------------------------------------
+%% Function:check_piece/11
+%% Purpose:
+%% Args:
+%% Returns:
+%%--------------------------------------------------------------------
 check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length, 
 	    Dl_storage_pid, Blocks, Piece_storage_pid, Length, Full_length) 
   when Acc < Piece_length ->
@@ -424,8 +596,11 @@ check_piece(Acc, The_pid, Index, Table_id, Chunk_table_id, Piece_length,
 		    Last_chunk_req = Last_piece_length - Last_chunk,
 		    case Acc > Last_chunk_req of
 			true ->
-			    check_piece(Piece_length+1, The_pid, Index, Table_id, Chunk_table_id, Piece_length, 
-					Dl_storage_pid, Blocks, Piece_storage_pid, Length, Full_length);
+			    check_piece(Piece_length+1, The_pid, Index,
+					Table_id, Chunk_table_id, Piece_length, 
+					Dl_storage_pid, Blocks, 
+					Piece_storage_pid, Length, 
+					Full_length);
 			_ ->
 			    false
 		    end;
