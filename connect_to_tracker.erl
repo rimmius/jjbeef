@@ -1,14 +1,13 @@
 %%%---------------------------------------------------------------------
 %%% Created by: Fredrik Gustafsson.
-%%% Creation date: 111007.
+%%% Creation date: 2001-11-07
 %%%--------------------------------------------------------------------- 
 %%% Description module connecting to a tracker
 %%%--------------------------------------------------------------------- 
 %%% What this module does:
-%%%Connects to a specified tracker returning information
+%%% Connects to a specified tracker returning information
 %%%--------------------------------------------------------------------- 
 %%% Exports 
-%%%start/4, make_list/2
 %%%--------------------------------------------------------------------- 
 %%% start()
 %%% spawn_links a new process to init function 
@@ -30,7 +29,6 @@ start(Dl_pid, Peers_pid, Length, File_storage_pid) ->
 %% Peers_pid: Pid of Peers
 %% Length: The total length of the file(s)
 %% File_storage_pid: Pid of File_storage
-%% Returns: -
 %%--------------------------------------------------------------------
 
 init(Dl_pid, Peers_pid, Length, File_storage_pid) ->
@@ -51,7 +49,6 @@ init(Dl_pid, Peers_pid, Length, File_storage_pid) ->
 %% Peers_pid: Pid of peers module
 %% Dl_pid: Pid of Download_manager module
 %% File_storage_pid: Pid of file_storage_pid 
-%% Returns: -
 %%--------------------------------------------------------------------
 
 loop(Info, Time, My_id, Tracker, Port, Length, Peers_pid, Dl_pid, 
@@ -112,6 +109,7 @@ get_current_pieces(File_storage_pid) ->
     {How_much, Uploaded} = mutex:request(File_storage_pid, how_much, []),
     mutex:received(File_storage_pid),
     {How_much, Uploaded}.
+
 %%--------------------------------------------------------------------
 %% Function: get_info/1
 %% Purpose: Connecting to tracker
