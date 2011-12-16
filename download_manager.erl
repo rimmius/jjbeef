@@ -57,7 +57,7 @@ init(File, GUIPid) ->
 			    get_piece_length({dict, Dict}), 
 			    get_length_and_name({dict, Dict}), File),
     link(Peers_pid),
-    loop(Peers_pid, Info_hash,Info_bencoded, guimain:createUniqueId(), 
+    loop(Peers_pid, Info_hash,Info_bencoded, gui_basic:createUniqueId(), 
 	 GUIPid, 0).
 
 is_valid_info_hash(Info_from_peer, Pid) ->
