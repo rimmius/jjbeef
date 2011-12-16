@@ -5,7 +5,8 @@
 %%%--------------------------------------------------------------------- 
 %%% Description module downloading_manager
 %%%--------------------------------------------------------------------- 
-%%% What this module does...
+%%% Parses the torrent file and handles the content
+%%% which will be handed over to its children
 %%%--------------------------------------------------------------------- 
 %%% Exports 
 %%%--------------------------------------------------------------------- 
@@ -13,19 +14,21 @@
 %%%   spawns a new process running the init method and returns its pid.
 %%%--------------------------------------------------------------------- 
 %%% init(.*torrent file name, Pid of gui module)
-%%%   
+%%%   initiates the information in the torrent file and
+%%% spawns peers
 %%%---------------------------------------------------------------------
 %%% is_valid_info_hash()
-%%%   
+%%%   checks if the info hash from peer is the same as
+%%% ours.
 %%%---------------------------------------------------------------------
 %%% get_my_id()
-%%%   
+%%%   Returns our id.
 %%%---------------------------------------------------------------------
 %%% get_my_info_hash()
-%%%   
+%%%   Returns the info hash for the current task
 %%%---------------------------------------------------------------------
 %%% get_info_clean()
-%%%   
+%%%   Returns the info hash in another clean format
 %%%---------------------------------------------------------------------
 
 -module(download_manager).
@@ -85,9 +88,16 @@ get_info_clean(Dl_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: loop/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Sends information to GUI and corresponds
+%% to messages from its children.
+%% Args: Peers_pid: The pid of peers module
+%% Info_hash: Our info hash format 1
+%% Info_clean: Our info hash format 2
+%% My_id: Our unique id.
+%% GUI_pid : The pid of gui module
+%% Counter that checks so that we send a message
+%% only once to GUI.
+%% Returns:-
 %%--------------------------------------------------------------------
   
 loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
@@ -137,9 +147,11 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_torrent_data/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: decodes the torrent file 
+%% Args: File: The file path to the torrent file
+%% Returns: Either, {dict, Dict} when the torrent file
+%% has been successfully read or {error, no_file} if
+%% the file cant be read.
 %%--------------------------------------------------------------------
 
 get_torrent_data(File) ->
@@ -155,9 +167,11 @@ get_torrent_data(File) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_announce_list/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Returns the list of trackers in the 
+%% announce list.
+%% Args: {dict, Dict}: The dictionary of the torrent
+%% file
+%% Returns: The list of trackers.
 %%--------------------------------------------------------------------
 
 get_announce_list({dict, Dict}) ->
@@ -172,9 +186,9 @@ get_announce_list({dict, Dict}) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_pieces/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose:  Grabs the pieces from the dictionary
+%% Args: {dict, Dict}, the dictionary of the torrent file
+%% Returns: The list of the pieces
 %%--------------------------------------------------------------------
 
 get_pieces({dict, Dict}) ->
@@ -184,9 +198,10 @@ get_pieces({dict, Dict}) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_piece_length/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Grabs the piece length of the task from
+%% the dictionary of the torrent file.
+%% Args: {dict, Dict}, dictionary of the torrent file
+%% Returns: The piece length
 %%--------------------------------------------------------------------
 
 get_piece_length({dict, Dict}) ->
@@ -195,9 +210,13 @@ get_piece_length({dict, Dict}) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_length_and_name/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Grab the length(s), the name(s), the
+%% length(s) of the task and the path where the
+%% file is going to be placed.
+%% Args: {dict, Dict}: The dictionary of the torrent
+%% file
+%% Returns: A tuple of the length(s), the name(s) of
+%% the file(s), the length(s) of the file(s) and the path
 %%--------------------------------------------------------------------
 
 get_length_and_name({dict, Dict}) ->
@@ -216,9 +235,11 @@ get_length_and_name({dict, Dict}) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_length/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Backend to calculate the total length
+%% of a multiple file task.
+%% Args: List: of lengths
+%% Total: The total length for the task.
+%% Returns: The total length.
 %%--------------------------------------------------------------------
 
 get_length([], Total) ->
@@ -229,9 +250,10 @@ get_length([{_,H}|T], Total) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_lengths_list/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Returning the length(s) of the file(s)
+%% in a list.
+%% Args:  List with length(s)
+%% Returns: The list with lengths
 %%--------------------------------------------------------------------
 
 get_lengths_list([]) ->
@@ -242,9 +264,9 @@ get_lengths_list([{_,H}|T]) ->
 
 %%--------------------------------------------------------------------
 %% Function: get_names/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Returning the names of the files
+%% Args: List with file names.
+%% Returns: The list with file names.
 %%--------------------------------------------------------------------
 
 get_names([]) ->
@@ -256,9 +278,12 @@ get_names([{_, H}|T]) ->
 
 %%--------------------------------------------------------------------
 %% Function: handle_pieces/4
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: backend to grab the pieces from a list.
+%% Args: List: of pieces
+%% Piece_list: the new piece list
+%% Byte: Accumulator for calculating bytes.
+%% New_list: the new list of pieces
+%% Returns: A list of pieces.
 %%--------------------------------------------------------------------
 
 handle_pieces([], Piece_list, _Byte, New_list) ->
