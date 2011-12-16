@@ -84,6 +84,7 @@ do_send(Socket, Type, Msg) ->
 	{have, Piece_index} ->
 	    gen_tcp:send(Socket, <<0,0,0,5,4, Piece_index:32/integer-big>>);
 	{bitfield, Bitfield_in_list} ->
+	    io:format("~nBITFIELD SENT~n"),
 	    gen_tcp:send(Socket, handle_bitfield(Bitfield_in_list));
 	{request, [Index, Begin, Length]} ->
 	    gen_tcp:send(Socket, <<0,0,0,13,6, 
@@ -91,6 +92,7 @@ do_send(Socket, Type, Msg) ->
 				Begin:32/integer-big,
 				Length:32/integer-big>>);
 	{piece, [Index, Begin, Block]} ->
+	    io:format("~nBLOCK SENT~n"),
 	    gen_tcp:send(Socket, handle_piece(Index, Begin, Block));
 	{cancel, [Index, Begin, Length]} ->
 	    gen_tcp:send(Socket, <<0,0,0,13,8,
