@@ -292,7 +292,6 @@ insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
 handshake_all_peers([], _Info, _Peer_id, _Peers_pid) ->
     ok;
 handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
-    io:format(H),
     case send_handshake(H, Port, Info, Peer_id, Peers_pid) of
 	{error, _Reason} ->
 	    handshake_all_peers(T, Info, Peer_id, Peers_pid);
