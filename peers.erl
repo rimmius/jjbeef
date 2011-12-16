@@ -4,7 +4,9 @@
 %%%--------------------------------------------------------------------- 
 %%% Description module peers
 %%%--------------------------------------------------------------------- 
-%%% What this module does...
+%%% Spawns all workers for the task plus keeping 
+%%% track of peers, supervising and controlling
+%%% their downloading
 %%%--------------------------------------------------------------------- 
 %%% Exports 
 %%%--------------------------------------------------------------------- 
@@ -13,16 +15,17 @@
 %%%   returns the pid
 %%%--------------------------------------------------------------------- 
 %%% insert_new_peers()
-%%%   
+%%%   inserts new peers from connect_to_tracker
+%%%   module
 %%%---------------------------------------------------------------------
 %%% insert_valid_peer()
-%%%   
+%%%   insert_valid peer successfully handshaken.
 %%%---------------------------------------------------------------------
 %%% notice_have()
-%%%   
+%%%   notices its children when we have a new piece
 %%%---------------------------------------------------------------------
 %%% init()
-%%%   
+%%%   initiates the module
 %%%---------------------------------------------------------------------
 
 -module(peers).
@@ -70,10 +73,16 @@ init(Dl_pid, Tracker_list, List_of_pieces, Piece_length, Length, File_names,
 	 Dl_storage_pid, [], Length).
 
 %%--------------------------------------------------------------------
-%% Function: loop/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Function: start_send/5
+%% Purpose: initiates the connecting to trackers 
+%%  in a list.
+%% Args: [H|T] the list of trackers.
+%%   Peers_pid: the pid of the peers module.
+%%   Dl_pid: pid of download_manager module
+%%   Length: the total length of the file.
+%%   File_storage_pid: The pid of the file_storage 
+%%   module
+%% Returns: -
 %%--------------------------------------------------------------------
 
 start_send([H|T], Peers_pid, Dl_pid, Length, File_storage_pid) ->
@@ -81,10 +90,16 @@ start_send([H|T], Peers_pid, Dl_pid, Length, File_storage_pid) ->
     send_to_tracker([H|T], Peers_pid, Dl_pid, Length, File_storage_pid).
 
 %%--------------------------------------------------------------------
-%% Function: loop/1
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Function: send_to_tracker/5
+%% Purpose: Tries to connect to the different trackers
+%% in the list and kills them if they timeout or exits
+%% with exception.
+%% Args: [H|T]: The list of trackers
+%% Peers_pid : The pid of peers module.
+%% Dl_pid: The pid of download_manager module
+%% Length: The total length of the task.
+%% File_storage_pid: The pid of file_storage module
+%% Returns: -
 %%--------------------------------------------------------------------
 
 send_to_tracker([],  Peers_pid, _Dl_pid, _Length, _File_storage_pid) ->
@@ -108,9 +123,21 @@ send_to_tracker([H|T],  Peers_pid, Dl_pid, Length, File_storage_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: loop/7
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Controlling messages coming in to the
+%%   process / supervising its children. 
+%% Args: Dl_pid: The pid of download_manager
+%%             module
+%% Peers_storage_pid: The pid of peer_storage
+%% module
+%% File_storage_pid: The pid of file_storage
+%% module
+%% Piece_storage_pid: The pid of the piece_storage
+%% module
+%% Dl_storage_pid: The pid of downloading_storage
+%% module
+%% Children: The list of peers we are supervising.
+%% Length: The total length of our torrent-task.
+%% Returns: -
 %%--------------------------------------------------------------------
  
 loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid, 
@@ -211,9 +238,12 @@ loop(Dl_pid, Peer_storage_pid, File_storage_pid, Piece_storage_pid,
 
 %%--------------------------------------------------------------------
 %% Function: removeChild/3
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Removing a child from the list of childs
+%% Args: Child: The pid of the process who terminated
+%% List: The list of children
+%% New_children: The new children
+%% Returns: List of children without the crashed 
+%% process
 %%--------------------------------------------------------------------
 
 removeChild(_Child, [], New_children) ->
@@ -228,9 +258,12 @@ removeChild(Child, [{Pid, Socket, Peer_id}|T], New_children) ->
 
 %%--------------------------------------------------------------------
 %% Function: insertChild/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Inserting a child to the list of children 
+%% Args:  {Pid, Socket, Peer_id}: The pid, Socket
+%% and Peer_id of the peer/process
+%% List: the List of children
+%% Returns: A new list with the new children insert-
+%% ed.
 %%--------------------------------------------------------------------
 
 insertChild({Pid, Socket, Peer_id}, List) ->
@@ -238,9 +271,12 @@ insertChild({Pid, Socket, Peer_id}, List) ->
 
 %%--------------------------------------------------------------------
 %% Function: insert_new_peers/3
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Tries to connect and handshake with
+%% new peers from tracker. 
+%% Args: List_raw: The raw list of peers.
+%% Peers_pid: The pid of the peers module
+%% Dl_pid: THe pid of download_manager module
+%% Returns: ok
 %%--------------------------------------------------------------------
 
 insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
@@ -251,9 +287,13 @@ insert_new_peers(List_raw, Peers_pid, Dl_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: handshake_all_peers/4
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Handshaking all the peers from tracker
+%% Args: [{H, Port}|T] The list of Ip's and ports from
+%% tracker
+%% Info: The info hash of this task.
+%% Peer_id: Our peer id.
+%% Peers_pid: The pid of peer module.
+%% Returns: ok
 %%--------------------------------------------------------------------
 
 handshake_all_peers([], _Info, _Peer_id, _Peers_pid) ->
@@ -269,9 +309,13 @@ handshake_all_peers([{H, Port}|T], Info, Peer_id, Peers_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: make_peer_list/4
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Makes a proper list with ip's and ports
+%% from a raw list from tracker.
+%% Args: [H|T]: The list of ip's and ports
+%% Ip: the ip generated
+%% Byte: Accumalating bytes
+%% New_list: New list with proper ip's and ports
+%% Returns: New list with proper ips and ports.
 %%--------------------------------------------------------------------
 
 make_peer_list([], _Ip, _Byte, New_list) ->
@@ -284,9 +328,10 @@ make_peer_list([H|[H2|T]], Ip, Byte, New_list) when Byte =:= 5 ->
 
 %%--------------------------------------------------------------------
 %% Function: convert_to_ip/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Converts a integer to a ip
+%% Args: [H|T]: The raw ip list
+%% New_list: The new generated ip list
+%% Returns: The Ip list
 %%--------------------------------------------------------------------
 
 convert_to_ip([], New_list) ->
@@ -301,9 +346,16 @@ convert_to_ip([H|T], New_list) ->
 
 %%--------------------------------------------------------------------
 %% Function: send_handshake/5
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Tries to send a handshake
+%% Args: Host: The host/ip of the peer.
+%% Port: The port of the ip at peer.
+%% Info: The info hash of the torrent-task.
+%% My_peer_id: Our peer id
+%% Peers_pid: The pid of peers module
+%% Returns: {ok, inserted} if we handshaked and
+%% they handshaked us back or {error, Reason}
+%% when something went bad in the handshaking
+%% sequence.
 %%--------------------------------------------------------------------
 
 send_handshake(Host, Port, Info, My_peer_id, Peers_pid) -> 
@@ -327,9 +379,13 @@ send_handshake(Host, Port, Info, My_peer_id, Peers_pid) ->
 
 %%--------------------------------------------------------------------
 %% Function: insert_valid_peer/5
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose:  Inserts a valid peer
+%% Args:  Peers_pid: the pid of peers module
+%% Peer_id: the peer_id of the peer.
+%% Sock: The socket that the peer is using.
+%% Host: THe ip of the peer.
+%% Port: The port that the peer is using.
+%% Returns: ok or {error, Reason} if failed.
 %%--------------------------------------------------------------------
 
 insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
@@ -342,9 +398,11 @@ insert_valid_peer(Peers_pid, Peer_id, Sock, Host, Port) ->
 
 %%--------------------------------------------------------------------
 %% Function: insert_valid_peer/3
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Inserts a valid peer from port_listener
+%% Args: Peers_pid : the pid of peers module
+%% Peer_id: The peer_id of the peer.
+%% Sock: The socket of the peer. 
+%% Returns:-
 %%--------------------------------------------------------------------
 
 insert_valid_peer(Peers_pid, Peer_id, Sock) ->
@@ -352,9 +410,11 @@ insert_valid_peer(Peers_pid, Peer_id, Sock) ->
 
 %%--------------------------------------------------------------------
 %% Function: update_interest/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: updates our interest 
+%% Args:  [{Child, Socket, Peer_id}|Children] :
+%% the list of children
+%% Index: The index.
+%% Returns:-
 %%--------------------------------------------------------------------
 
 update_interest([], _Index) ->
@@ -365,9 +425,10 @@ update_interest([{Child, _Socket, _Peer_id} | Children], Index) ->
 
 %%--------------------------------------------------------------------
 %% Function: notice_have/2
-%% Purpose: 
-%% Args: 
-%% Returns:
+%% Purpose: Notices our peers of our new piece 
+%% Args: Pid: the pid of the peer.
+%% Index: the index we just downloaded
+%% Returns:-
 %%--------------------------------------------------------------------
 
 notice_have(Pid, Index) ->
