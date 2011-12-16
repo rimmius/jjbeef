@@ -1,9 +1,26 @@
-%%%Creation date 111007
-%%%Copied and then modified from https://github.com/logaan/erlang-bittorrent/blob/fdfe4b87d596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
-%%%Decoding and encoding bencoded information.
+%%%---------------------------------------------------------------------
+%%% source:  https://github.com/logaan/erlang-bittorrent/blob/fdfe4b87d
+%%%          596ad50d9368534fd6c1aa0ffebc40a/bencode.erl
+%%% Modified by: Fredrik Gustafsson
+%%% Creation date: 2011-10-07
+%%%--------------------------------------------------------------------- 
+%%% Description module bencode
+%%%--------------------------------------------------------------------- 
+%%% Decoding and encoding bencoded information
+%%%--------------------------------------------------------------------- 
+%%% Exports 
+%%%--------------------------------------------------------------------- 
+%%% decode(Data)
+%%%     bencode decoding function
+%%%--------------------------------------------------------------------- 
+%%% encode(Data)
+%%%     bencode encoding function
+%%%---------------------------------------------------------------------
+
 -module(bencode).
 -export([decode/1, encode/1]).
 -define(DICT, dict).
+
 %%Bencode decoding functions
 decode(<<$l, Tail/binary>>) ->
     decode_list(Tail, []);
