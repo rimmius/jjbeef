@@ -116,7 +116,7 @@ loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter) ->
 	{this_tracker, Tracker} ->
 	    GUI_pid ! {tracker, Tracker},
 	    loop(Peers_pid, Info_hash, Info_clean, My_id, GUI_pid, Counter);
-	{'EXIT', Peers_pid, Reason} ->
+	{'EXIT', Peers_pid, _Reason} ->
 	    exit(self(), kill);
 	stop -> ok
     after 3000 ->
