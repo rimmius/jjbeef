@@ -1,6 +1,28 @@
 %%% Created by: Eva-Lisa Kedborn, Jing Liu
 %%% Creation date: 2011-11-18
 %%% This module module stores piece info
+%%%--------------------------------------------------------------------- 
+%%% Description module downloading_storage
+%%%--------------------------------------------------------------------- 
+%%% The downloading storage is for storing pieces that are being 
+%%% downloaded by a process. They are moved from the piece storage 
+%%% that stores all the pieces initially and everytime a process
+%%% requests a piece it is deleted from the piece storage, to make sure no
+%%% other process downloads the same piece, and moved into this storage.
+%%% If a peer from whom we are downloading a piece then disconnects the  
+%%% that piece will be moved back to the piece storage so it can be 
+%%% requested for downloaded again.
+%%%--------------------------------------------------------------------- 
+%%% Exports start/0
+%%%         init/0
+%%%--------------------------------------------------------------------- 
+%%% start()
+%%%   spawns a new process running the init method
+%%%--------------------------------------------------------------------- 
+%%% init()
+%%%   creates an ets table to store the pieces being downloaded
+%%%   returns the TableID of the created table 
+%%%---------------------------------------------------------------------  
 
 -module(downloading_storage).
 -export([start/0, init/0]).
